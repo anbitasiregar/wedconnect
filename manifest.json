@@ -18,7 +18,8 @@
   },
   "permissions": [
     "identity",
-    "storage"
+    "storage",
+    "tabs"
   ],
   "host_permissions": [
     "https://www.googleapis.com/*"
@@ -32,8 +33,14 @@
   },
   "content_scripts": [
     {
-      "matches": ["https://web.whatsapp.com/*"],
+      "matches": [
+        "https://web.whatsapp.com/*",
+        "https://*.whatsapp.com/*"
+      ],
       "js": ["content.js"]
     }
-  ]
+  ],
+  "background": {
+    "service_worker": "background.js"
+  }
 } 

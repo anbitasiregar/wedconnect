@@ -17,3 +17,13 @@ This step is required so the extension can correctly identify which messages are
 
 ### Google Auth
 Sign into your Google account to give access the extension to your master dashboards and documents.
+
+## Swapping AI Providers
+
+The extension is designed to let you easily change which AI service is used for RSVP detection and chat. To swap providers:
+
+1. Open `aiProvider.js` in the extension folder.
+2. Edit the `callAI` function to use your preferred AI API (OpenAI, Google Gemini, local LLM, etc.).
+3. Save the file and reload the extension in Chrome.
+
+See the comments in `aiProvider.js` for example implementations for different providers.

@@ -16,11 +16,12 @@ window.authenticateWithGoogle = authenticateWithGoogle;
 
 // Get all sheet names from a spreadsheet
 async function getAllSheetNames(token, spreadsheetId) {
-  const response = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}?fields=sheets.properties.title`, {
+  const response = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}?fields=sheets.properties.title,sheets.properties.hidden`, {
     headers: { 'Authorization': `Bearer ${token}` }
   });
   const data = await response.json();
-  return data.sheets.map(sheet => sheet.properties.title);
+  // Only return names of sheets that are not hidden
+  return data.sheets.filter(sheet => !sheet.properties.hidden).map(sheet => sheet.properties.title);
 }
 
 // Read data from Google Sheet
