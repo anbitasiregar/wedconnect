@@ -181,27 +181,44 @@ ${response.messages.join('\n')}`;
                     <strong>✅ RSVP YES</strong><br>
                     Name: ${result.name}<br>
                     Response: ${result.response}<br>
-                    <button onclick="updateSheet('${result.name}', 'YES')" style="margin-top: 4px;">Add to Sheet as Attending</button>
+                    <button class="action-btn" data-action="update-sheet" data-name="${result.name}" data-status="YES" style="margin-top: 4px;">Add to Sheet as Attending</button>
                   </div>`;
                 } else if (result.status === 'NO') {
                   displayHTML += `<div style="margin: 8px 0; padding: 8px; background: #ffeaea; border-left: 4px solid #f44336;">
                     <strong>❌ RSVP NO</strong><br>
                     Name: ${result.name}<br>
                     Response: ${result.response}<br>
-                    <button onclick="updateSheet('${result.name}', 'NO')" style="margin-top: 4px;">Add to Sheet as Not Attending</button>
+                    <button class="action-btn" data-action="update-sheet" data-name="${result.name}" data-status="NO" style="margin-top: 4px;">Add to Sheet as Not Attending</button>
                   </div>`;
                 } else {
                   displayHTML += `<div style="margin: 8px 0; padding: 8px; background: #fff3cd; border-left: 4px solid #ffc107;">
                     <strong>❓ UNSURE</strong><br>
                     Name: ${result.name}<br>
                     Response: ${result.response}<br>
-                    <button onclick="flagForReview('${result.name}', '${result.response}')" style="margin-top: 4px;">Flag for Manual Review</button>
+                    <button class="action-btn" data-action="flag-review" data-name="${result.name}" data-response="${result.response}" style="margin-top: 4px;">Flag for Manual Review</button>
                   </div>`;
                 }
               });
             }
             
             aiAnalysisDiv.innerHTML = displayHTML;
+            
+            // Add event listeners to the buttons
+            aiAnalysisDiv.addEventListener('click', function(e) {
+              if (e.target.classList.contains('action-btn')) {
+                const action = e.target.dataset.action;
+                const name = e.target.dataset.name;
+                const status = e.target.dataset.status;
+                const response = e.target.dataset.response;
+                
+                if (action === 'update-sheet') {
+                  updateSheet(name, status);
+                } else if (action === 'flag-review') {
+                  flagForReview(name, response);
+                }
+              }
+            });
+            
             console.log('Displayed AI result in popup');
           } else {
             aiAnalysisDiv.innerHTML = '<p>No analysis result received from AI.</p>';
