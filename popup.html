@@ -38,9 +38,88 @@
       white-space: pre-wrap;
       word-wrap: break-word;
     }
+    .onboarding-step {
+      display: none;
+    }
+    .onboarding-step.active {
+      display: block;
+    }
+    .setup-status {
+      padding: 8px;
+      margin: 8px 0;
+      border-radius: 4px;
+    }
+    .setup-status.success {
+      background: #e8f5e8;
+      border: 1px solid #4caf50;
+    }
+    .setup-status.warning {
+      background: #fff3cd;
+      border: 1px solid #ffc107;
+    }
+    .setup-status.error {
+      background: #ffeaea;
+      border: 1px solid #f44336;
+    }
   </style>
 </head>
 <body>
+  <div class="section">
+    <h3>🎉 Welcome to WedConnect!</h3>
+    <div id="setup-status" class="setup-status warning">
+      <strong>Setup Required:</strong> Please configure your RSVP tracking system.
+    </div>
+    <button id="start-setup">Start RSVP Setup Wizard</button>
+  </div>
+
+  <div id="onboarding-steps">
+    <div id="step-1" class="onboarding-step active">
+      <h4>Step 1: Connect to Google Sheets</h4>
+      <p>First, let's connect to your Google Sheet where you want to track RSVPs.</p>
+      <input type="text" id="setup-spreadsheet-id" placeholder="Paste your Google Sheets URL here">
+      <button id="analyze-sheet">Analyze Sheet Structure</button>
+    </div>
+
+    <div id="step-2" class="onboarding-step">
+      <h4>Step 2: Configure RSVP Tracking</h4>
+      <div id="sheet-analysis"></div>
+      <div id="header-row-config">
+        <p><strong>Header Row:</strong> 
+          <select id="header-row-selector">
+            <option value="">Select header row...</option>
+          </select>
+          <button id="refresh-analysis">Refresh Analysis</button>
+        </p>
+        <p><small>Select which row contains your column headers. If your sheet has multiple header rows, choose the row with the actual column names.</small></p>
+      </div>
+      <div id="rsvp-config">
+        <p><strong>Name Format:</strong></p>
+        <label><input type="radio" name="name-format" value="separate" id="name-separate"> First Name and Last Name are separate columns</label><br>
+        <label><input type="radio" name="name-format" value="combined" id="name-combined"> Full Name is in one column</label>
+        
+        <div id="separate-name-config">
+          <p><strong>First Name Column:</strong> <select id="first-name-column"></select></p>
+          <p><strong>Last Name Column:</strong> <select id="last-name-column"></select></p>
+        </div>
+        
+        <div id="combined-name-config" style="display: none;">
+          <p><strong>Full Name Column:</strong> <select id="full-name-column"></select></p>
+        </div>
+        
+        <p><strong>RSVP Response Column:</strong> <select id="rsvp-response-column"></select></p>
+        <p><strong>Date Column:</strong> <select id="date-column"></select></p>
+      </div>
+      <button id="save-config">Save Configuration</button>
+    </div>
+
+    <div id="step-3" class="onboarding-step">
+      <h4>Step 3: Test Setup</h4>
+      <div id="test-results"></div>
+      <button id="test-rsvp">Test RSVP Entry</button>
+      <button id="finish-setup">Finish Setup</button>
+    </div>
+  </div>
+
   <div class="section">
     <h3>WhatsApp Messages</h3>
     <button id="fetch-messages">Fetch WhatsApp Messages</button>
