@@ -2,6 +2,7 @@
 
 ## Onboarding for Other Users
 
+### Setting up WhatsApp
 To use this extension with your own WhatsApp account, you must set your WhatsApp display name in the code:
 
 1. Open `content.js` in the extension folder.
@@ -13,3 +14,6 @@ To use this extension with your own WhatsApp account, you must set your WhatsApp
 4. Save the file and reload the extension in Chrome.
 
 This step is required so the extension can correctly identify which messages are sent by you and which are sent by others.
+
+### Google Auth
+Sign into your Google account to give access the extension to your master dashboards and documents.

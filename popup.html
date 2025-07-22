@@ -9,8 +9,17 @@
 </head>
 <body>
   <h1>Hello, World!</h1>
+  <button id="google-signin">Sign in with Google</button>
   <button id="fetch-messages">Fetch WhatsApp Messages</button>
   <div id="messages" style="margin-top: 16px; max-height: 200px; overflow-y: auto;"></div>
+  <hr>
+  <div>
+    <h3>Google Sheets Settings</h3>
+    <input type="text" id="spreadsheet-id" placeholder="Enter Spreadsheet ID">
+    <input type="text" id="sheet-name" placeholder="Sheet Name (optional, reads all if blank)">
+    <button id="save-settings">Save Settings</button>
+    <button id="read-sheet">Read Sheet Data</button>
+  </div>
   <script src="popup.js"></script>
 </body>
 </html> 

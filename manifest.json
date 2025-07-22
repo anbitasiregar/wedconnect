@@ -16,6 +16,20 @@
     "48": "icon48.png",
     "128": "icon128.png"
   },
+  "permissions": [
+    "identity",
+    "storage"
+  ],
+  "host_permissions": [
+    "https://www.googleapis.com/*"
+  ],
+  "oauth2": {
+    "client_id": "997774247576-qe7184nr00sefra4m4v8366setqjd2u6.apps.googleusercontent.com",
+    "scopes": [
+      "https://www.googleapis.com/auth/spreadsheets",
+      "https://www.googleapis.com/auth/userinfo.email"
+    ]
+  },
   "content_scripts": [
     {
       "matches": ["https://web.whatsapp.com/*"],
