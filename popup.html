@@ -1,170 +1,230 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-  <meta charset="UTF-8">
-  <title>Hello World</title>
+  <title>WedConnect</title>
   <style>
-    body { 
-      font-family: Arial, sans-serif; 
-      min-width: 400px; 
-      min-height: 200px; 
-      padding: 16px;
+    body {
+      width: 400px;
+      padding: 20px;
+      font-family: Arial, sans-serif;
+      margin: 0;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      position: relative;
     }
-    .section {
-      margin-bottom: 16px;
-      padding: 8px;
-      border: 1px solid #ddd;
-      border-radius: 4px;
+    
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 20px;
     }
-    .section h3 {
-      margin-top: 0;
-      margin-bottom: 8px;
+    
+    .title {
+      font-size: 24px;
+      font-weight: bold;
+      margin: 0;
     }
-    input, button {
-      margin: 4px;
-      padding: 4px 8px;
+    
+    .settings-btn {
+      background: rgba(255, 255, 255, 0.2);
+      border: 1px solid rgba(255, 255, 255, 0.3);
+      color: white;
+      padding: 8px 12px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 12px;
+      transition: background 0.3s;
     }
-    #messages, #ai-analysis {
-      width: 100%;
-      min-height: 100px;
-      max-height: 300px;
-      overflow-y: auto;
-      border: 1px solid #ccc;
-      padding: 8px;
-      margin-top: 8px;
-      background: #f9f9f9;
+    
+    .settings-btn:hover {
+      background: rgba(255, 255, 255, 0.3);
     }
-    pre {
-      white-space: pre-wrap;
-      word-wrap: break-word;
-    }
-    .onboarding-step {
+    
+    .settings-menu {
+      position: absolute;
+      top: 60px;
+      right: 20px;
+      background: white;
+      color: #333;
+      border-radius: 8px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+      padding: 8px 0;
       display: none;
+      z-index: 1000;
+      min-width: 180px;
     }
-    .onboarding-step.active {
+    
+    .settings-menu.show {
       display: block;
     }
-    .setup-status {
-      padding: 8px;
-      margin: 8px 0;
+    
+    .settings-menu button {
+      display: block;
+      width: 100%;
+      padding: 8px 16px;
+      border: none;
+      background: none;
+      text-align: left;
+      cursor: pointer;
+      font-size: 14px;
+      color: #333;
+    }
+    
+    .settings-menu button:hover {
+      background: #f5f5f5;
+    }
+    
+    .main-content {
+      text-align: center;
+    }
+    
+    .update-rsvp-btn {
+      background: #4CAF50;
+      color: white;
+      border: none;
+      padding: 12px 24px;
+      border-radius: 8px;
+      font-size: 16px;
+      font-weight: bold;
+      cursor: pointer;
+      margin: 20px 0;
+      transition: background 0.3s;
+    }
+    
+    .update-rsvp-btn:hover {
+      background: #45a049;
+    }
+    
+    .ai-results {
+      background: white;
+      color: #333;
+      border-radius: 8px;
+      padding: 16px;
+      margin-top: 16px;
+      text-align: left;
+      border: 1px solid #ddd;
+    }
+    
+    .section {
+      margin-bottom: 20px;
+      padding: 15px;
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 8px;
+    }
+    
+    .section h3 {
+      margin-top: 0;
+      color: white;
+    }
+    
+    button {
+      background: #4CAF50;
+      color: white;
+      border: none;
+      padding: 8px 16px;
       border-radius: 4px;
+      cursor: pointer;
+      margin: 4px;
     }
-    .setup-status.success {
-      background: #e8f5e8;
-      border: 1px solid #4caf50;
+    
+    button:hover {
+      background: #45a049;
     }
-    .setup-status.warning {
-      background: #fff3cd;
-      border: 1px solid #ffc107;
+    
+    input, select {
+      width: 100%;
+      padding: 8px;
+      margin: 4px 0;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      box-sizing: border-box;
     }
-    .setup-status.error {
-      background: #ffeaea;
-      border: 1px solid #f44336;
+    
+    .hidden {
+      display: none;
     }
   </style>
 </head>
 <body>
-  <div class="section">
-    <h3>🎉 Welcome to WedConnect!</h3>
-    <div id="setup-status" class="setup-status success">
-      <strong>✅ Setup Complete:</strong> RSVP tracking is configured and ready to use!
-      <br><button id="reset-setup" style="margin-top: 8px; padding: 4px 8px; background: #f0f0f0; border: 1px solid #ccc; border-radius: 3px;">Reset Setup</button>
-    </div>
+  <div class="header">
+    <h1 class="title">WedConnect</h1>
+    <button class="settings-btn" id="settings-btn">Settings</button>
+  </div>
+  
+  <div class="settings-menu" id="settings-menu">
+    <button id="sign-in-google">Sign in with Google</button>
     <button id="start-setup">Start RSVP Setup Wizard</button>
+    <button id="run-tests">Run Test Suite</button>
   </div>
 
-  <div id="onboarding-steps">
-    <div id="step-1" class="onboarding-step active">
-      <h4>Step 1: Connect to Google Sheets</h4>
-      <p>First, let's connect to your Google Sheet where you want to track RSVPs.</p>
-      <input type="text" id="setup-spreadsheet-id" placeholder="Paste your Google Sheets URL here">
-      <button id="analyze-sheet">Analyze Sheet Structure</button>
-    </div>
-
-    <div id="step-2" class="onboarding-step">
-      <h4>Step 2: Configure RSVP Tracking</h4>
-      <div id="sheet-analysis"></div>
-      <div id="header-row-config">
-        <p><strong>Header Row:</strong> 
-          <select id="header-row-selector">
-            <option value="">Select header row...</option>
-          </select>
-          <button id="refresh-analysis">Refresh Analysis</button>
-        </p>
-        <p><small>Select which row contains your column headers. If your sheet has multiple header rows, choose the row with the actual column names.</small></p>
-      </div>
-      <div id="rsvp-config">
-        <p><strong>Name Format:</strong></p>
-        <label><input type="radio" name="name-format" value="separate" id="name-separate"> First Name and Last Name are separate columns</label><br>
-        <label><input type="radio" name="name-format" value="combined" id="name-combined"> Full Name is in one column</label>
-        
-        <div id="separate-name-config">
-          <p><strong>First Name Column:</strong> <select id="first-name-column"></select></p>
-          <p><strong>Last Name Column:</strong> <select id="last-name-column"></select></p>
-        </div>
-        
-        <div id="combined-name-config" style="display: none;">
-          <p><strong>Full Name Column:</strong> <select id="full-name-column"></select></p>
-        </div>
-        
-        <p><strong>RSVP Response Column:</strong> <select id="rsvp-response-column"></select></p>
-        <button id="detect-dropdowns" style="margin-left: 8px; padding: 4px 8px; background: #e3f2fd; border: 1px solid #2196f3; border-radius: 3px;">Detect Dropdown Options</button>
-      </div>
-      
-      <div id="rsvp-mapping-config">
-        <h5>RSVP Response Mapping</h5>
-        <p><small>Configure how AI responses should map to your dropdown options:</small></p>
-        <div id="dropdown-options"></div>
-        <div id="ai-mapping">
-          <p><strong>AI Response Mapping:</strong></p>
-          <p>When AI detects "YES" → <select id="yes-mapping"></select></p>
-          <p>When AI detects "NO" → <select id="no-mapping"></select></p>
-          <p>When AI detects "UNSURE" → <select id="unsure-mapping"></select></p>
-        </div>
-      </div>
-      <button id="save-config">Save Configuration</button>
-    </div>
-
-    <div id="step-3" class="onboarding-step">
-      <h4>Step 3: Test Setup</h4>
-      <div id="test-results"></div>
-      <button id="test-rsvp">Test RSVP Entry</button>
-      <button id="finish-setup">Finish Setup</button>
-    </div>
+  <div class="main-content">
+    <button id="update-rsvp" class="update-rsvp-btn">Update RSVP</button>
+    <div id="ai-results" class="ai-results"></div>
   </div>
 
-  <div class="section">
-    <h3>WhatsApp Messages</h3>
-    <button id="fetch-messages">Fetch WhatsApp Messages</button>
-    <button id="analyze-messages">Analyze WhatsApp Messages</button>
-    <div id="messages"></div>
-  </div>
-
-  <div class="section">
+  <!-- Hidden sections for settings functionality -->
+  <div class="section hidden" id="google-sheets-section">
     <h3>Google Sheets Settings</h3>
-    <input type="text" id="spreadsheet-id" placeholder="Paste Google Sheets URL here">
-    <input type="text" id="sheet-name" placeholder="Sheet Name (optional, reads all if blank)">
+    <input type="text" id="spreadsheet-url" placeholder="Google Sheets URL">
+    <input type="text" id="sheet-name" placeholder="Sheet Name (optional)">
     <button id="save-settings">Save Settings</button>
     <button id="read-sheet">Read Sheet Data</button>
+    <div id="sheet-data"></div>
   </div>
 
-  <div class="section">
-    <h3>Google Authentication</h3>
-    <button id="google-signin">Sign in with Google</button>
-  </div>
-
-  <div class="section">
+  <div class="section hidden" id="ai-settings-section">
     <h3>AI Settings</h3>
-    <input type="password" id="ai-api-key" placeholder="Enter Google Gemini API Key">
-    <button id="save-ai-key">Save AI Key</button>
+    <input type="text" id="ai-api-key" placeholder="AI API Key">
+    <button id="save-ai-settings">Save AI Settings</button>
+    <button id="analyze-messages">Analyze WhatsApp Messages</button>
+    <div id="ai-analysis-results"></div>
   </div>
 
-  <div class="section">
-    <h3>AI Analysis Results</h3>
-    <div id="ai-analysis"></div>
+  <div class="section hidden" id="setup-section">
+    <h3>RSVP Setup Wizard</h3>
+    <div id="setup-status"></div>
+    <div id="onboarding-steps">
+      <div id="step-1" class="hidden">
+        <h4>Step 1: Sheet Configuration</h4>
+        <input type="text" id="setup-spreadsheet-url" placeholder="Google Sheets URL">
+        <input type="text" id="setup-sheet-name" placeholder="Sheet Name">
+        <button id="analyze-sheet">Analyze Sheet Structure</button>
+      </div>
+      
+      <div id="step-2" class="hidden">
+        <h4>Step 2: Column Mapping</h4>
+        <label>Name Format:</label>
+        <select id="name-format">
+          <option value="separate">Separate First/Last Name</option>
+          <option value="combined">Combined Full Name</option>
+        </select>
+        
+        <label>Header Row:</label>
+        <select id="header-row"></select>
+        
+        <div id="column-mapping"></div>
+        <button id="save-config">Save Configuration</button>
+      </div>
+      
+      <div id="step-3" class="hidden">
+        <h4>Step 3: RSVP Mapping</h4>
+        <div id="rsvp-mapping-config">
+          <label>YES Response:</label>
+          <select id="yes-mapping"></select>
+          
+          <label>NO Response:</label>
+          <select id="no-mapping"></select>
+          
+          <button id="detect-dropdown">Detect Dropdown Options</button>
+        </div>
+        <button id="test-rsvp">Test RSVP Entry</button>
+        <button id="finish-setup">Finish Setup</button>
+      </div>
+    </div>
   </div>
 
-  <div class="section">
+  <div class="section hidden" id="calendar-docs-section">
     <h3>Google Calendar & Docs</h3>
     <button id="test-calendar">Test Calendar Access</button>
     <button id="test-docs">Test Docs Access</button>
@@ -173,9 +233,9 @@
     <div id="calendar-docs-results"></div>
   </div>
 
-  <div class="section">
-    <h3>🧪 Testing</h3>
-    <button id="run-tests">Run Test Suite</button>
+  <div class="section hidden" id="testing-section">
+    <h3>Testing</h3>
+    <button id="run-tests-btn">Run Test Suite</button>
     <div id="test-results"></div>
   </div>
 

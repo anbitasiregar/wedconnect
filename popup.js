@@ -5,61 +5,348 @@ let rsvpConfig = {};
 
 // Check if setup is complete on page load
 document.addEventListener('DOMContentLoaded', function() {
-  chrome.storage.sync.get(['rsvpConfig', 'spreadsheetId'], function(result) {
-    if (result.rsvpConfig && result.spreadsheetId) {
-      // Setup is complete, hide onboarding but show reset button
-      document.getElementById('onboarding-steps').style.display = 'none';
-      updateSetupStatus('success', '✅ Setup Complete: RSVP tracking is configured and ready to use!');
-      
-      // Make sure reset button is visible
-      const resetBtn = document.getElementById('reset-setup');
-      if (resetBtn) {
-        resetBtn.style.display = 'inline-block';
+  // Settings menu functionality
+  const settingsBtn = document.getElementById('settings-btn');
+  const settingsMenu = document.getElementById('settings-menu');
+  
+  if (settingsBtn && settingsMenu) {
+    settingsBtn.addEventListener('click', function() {
+      settingsMenu.classList.toggle('show');
+    });
+    
+    // Close settings menu when clicking outside
+    document.addEventListener('click', function(event) {
+      if (!settingsBtn.contains(event.target) && !settingsMenu.contains(event.target)) {
+        settingsMenu.classList.remove('show');
       }
-    } else {
-      // Setup required, show onboarding
-      showStep(1);
-      updateSetupStatus('warning', 'Setup Required: Please configure your RSVP tracking system.');
-      
-      // Hide reset button if setup is not complete
-      const resetBtn = document.getElementById('reset-setup');
-      if (resetBtn) {
-        resetBtn.style.display = 'none';
-      }
-    }
-  });
-});
-
-// Setup wizard event listeners
-document.getElementById('start-setup').addEventListener('click', function() {
-  document.getElementById('onboarding-steps').style.display = 'block';
-  showStep(1);
-});
-
-document.getElementById('analyze-sheet').addEventListener('click', function() {
-  const spreadsheetInput = document.getElementById('setup-spreadsheet-id').value.trim();
-  if (!spreadsheetInput) {
-    alert('Please enter a Google Sheets URL first.');
-    return;
+    });
   }
   
-  // Extract spreadsheet ID from URL
-  const urlMatch = spreadsheetInput.match(/\/d\/([a-zA-Z0-9-_]+)/);
-  const spreadsheetId = urlMatch ? urlMatch[1] : spreadsheetInput;
+  // Settings menu buttons
+  const signInGoogleBtn = document.getElementById('sign-in-google');
+  const startSetupBtn = document.getElementById('start-setup');
+  const runTestsBtn = document.getElementById('run-tests');
   
-  analyzeSheetStructure(spreadsheetId);
-});
+  if (signInGoogleBtn) {
+    signInGoogleBtn.addEventListener('click', function() {
+      settingsMenu.classList.remove('show');
+      // Trigger Google sign-in flow
+      chrome.identity.getAuthToken({ interactive: true }, function(token) {
+        if (chrome.runtime.lastError) {
+          console.error('Google sign-in failed:', chrome.runtime.lastError.message);
+          alert('Google sign-in failed: ' + chrome.runtime.lastError.message);
+        } else {
+          console.log('Google sign-in successful');
+          alert('Google sign-in successful!');
+        }
+      });
+    });
+  }
+  
+  if (startSetupBtn) {
+    startSetupBtn.addEventListener('click', function() {
+      settingsMenu.classList.remove('show');
+      showSection('setup-section');
+      startOnboarding();
+    });
+  }
+  
+  if (runTestsBtn) {
+    runTestsBtn.addEventListener('click', function() {
+      settingsMenu.classList.remove('show');
+      showSection('testing-section');
+      runTestSuite();
+    });
+  }
+  
+  // Main Update RSVP button
+  const updateRsvpBtn = document.getElementById('update-rsvp');
+  if (updateRsvpBtn) {
+    updateRsvpBtn.addEventListener('click', analyzeWhatsAppMessages);
+  }
+  
+  // Helper function to extract spreadsheet ID from URL
+  function extractSpreadsheetId(url) {
+    const urlMatch = url.match(/\/d\/([a-zA-Z0-9-_]+)/);
+    return urlMatch ? urlMatch[1] : null;
+  }
+  
+  // Helper function to show/hide sections
+  function showSection(sectionId) {
+    // Hide all sections first
+    const allSections = document.querySelectorAll('.section');
+    allSections.forEach(section => section.classList.add('hidden'));
+    
+    // Show the requested section
+    const targetSection = document.getElementById(sectionId);
+    if (targetSection) {
+      targetSection.classList.remove('hidden');
+    }
+  }
+  
+  // Function to run test suite
+  function runTestSuite() {
+    const testResultsDiv = document.getElementById('test-results');
+    if (testResultsDiv) {
+      testResultsDiv.innerHTML = '<p>Running tests... Check console for results.</p>';
+      
+      // Capture console output for test results
+      const originalLog = console.log;
+      const testOutput = [];
+      console.log = function(...args) {
+        testOutput.push(args.join(' '));
+        originalLog.apply(console, args);
+      };
+      
+      // Run tests
+      setTimeout(() => {
+        window.runAllTests();
+        
+        // Restore console and show results
+        console.log = originalLog;
+        testResultsDiv.innerHTML = `
+          <div style="background: #f0f8ff; padding: 8px; border-radius: 4px; margin-top: 8px; color: #333;">
+            <strong>Test Results:</strong><br>
+            <small>Check browser console for detailed results.</small><br>
+            <small>Tests completed!</small>
+          </div>
+        `;
+      }, 100);
+    }
+  }
+  
+  // Function to read sheet data
+  async function readSheetData(spreadsheetId, sheetName) {
+    try {
+      window.authenticateWithGoogle(async function(token) {
+        try {
+          const data = await window.getSheetData(token, spreadsheetId, sheetName);
+          const sheetDataDiv = document.getElementById('sheet-data');
+          if (sheetDataDiv) {
+            sheetDataDiv.innerHTML = `
+              <div style="background: #e8f5e8; padding: 8px; border-radius: 4px; margin: 8px 0;">
+                <strong>Sheet Data:</strong><br>
+                <pre>${JSON.stringify(data, null, 2)}</pre>
+              </div>
+            `;
+          }
+        } catch (error) {
+          console.error('Error reading sheet:', error);
+          const sheetDataDiv = document.getElementById('sheet-data');
+          if (sheetDataDiv) {
+            sheetDataDiv.innerHTML = `<p style="color: red;">Error reading sheet: ${error.message}</p>`;
+          }
+        }
+      });
+    } catch (error) {
+      console.error('Authentication error:', error);
+    }
+  }
+  
+  // Function to start onboarding
+  function startOnboarding() {
+    const setupStatus = document.getElementById('setup-status');
+    if (setupStatus) {
+          setupStatus.innerHTML = `
+      <div style="background: #e8f5e8; padding: 8px; border-radius: 4px; margin: 8px 0; color: #333;">
+        <strong>Setup Wizard Started:</strong> Let's configure your RSVP tracking!
+      </div>
+    `;
+    }
+    
+    // Show step 1
+    const step1 = document.getElementById('step-1');
+    if (step1) {
+      step1.classList.remove('hidden');
+    }
+  }
 
-document.getElementById('save-config').addEventListener('click', function() {
-  saveRSVPConfiguration();
-});
+  // Load saved settings
+  chrome.storage.sync.get(['rsvpConfig', 'spreadsheetId'], function(result) {
+    if (result.rsvpConfig && result.spreadsheetId) {
+      // Setup is complete, show main interface
+      console.log('Setup complete, showing main interface');
+    } else {
+      // Setup required, show welcome message
+      console.log('Setup required');
+    }
+  });
 
-document.getElementById('test-rsvp').addEventListener('click', function() {
-  testRSVPEntry();
-});
+  // Setup wizard event listeners
+  const analyzeSheetBtn = document.getElementById('analyze-sheet');
+  const saveConfigBtn = document.getElementById('save-config');
+  const testRsvpBtn = document.getElementById('test-rsvp');
+  const finishSetupBtn = document.getElementById('finish-setup');
+  const detectDropdownBtn = document.getElementById('detect-dropdown');
+  
+  if (analyzeSheetBtn) {
+    analyzeSheetBtn.addEventListener('click', function() {
+      const spreadsheetInput = document.getElementById('setup-spreadsheet-url').value.trim();
+      if (!spreadsheetInput) {
+        alert('Please enter a Google Sheets URL first.');
+        return;
+      }
+      
+      // Extract spreadsheet ID from URL
+      const urlMatch = spreadsheetInput.match(/\/d\/([a-zA-Z0-9-_]+)/);
+      const spreadsheetId = urlMatch ? urlMatch[1] : spreadsheetInput;
+      
+      analyzeSheetStructure(spreadsheetId);
+    });
+  }
+  
+  if (saveConfigBtn) {
+    saveConfigBtn.addEventListener('click', function() {
+      saveRSVPConfiguration();
+    });
+  }
+  
+  if (testRsvpBtn) {
+    testRsvpBtn.addEventListener('click', function() {
+      testRSVPEntry();
+    });
+  }
+  
+  if (finishSetupBtn) {
+    finishSetupBtn.addEventListener('click', function() {
+      finishSetup();
+    });
+  }
+  
+  if (detectDropdownBtn) {
+    detectDropdownBtn.addEventListener('click', function() {
+      detectDropdownOptions();
+    });
+  }
 
-document.getElementById('finish-setup').addEventListener('click', function() {
-  finishSetup();
+  // Google Sheets Settings
+  const saveSettingsBtn = document.getElementById('save-settings');
+  const readSheetBtn = document.getElementById('read-sheet');
+  
+  if (saveSettingsBtn) {
+    saveSettingsBtn.addEventListener('click', function() {
+      const spreadsheetUrl = document.getElementById('spreadsheet-url').value;
+      const sheetName = document.getElementById('sheet-name').value;
+      
+      // Extract spreadsheet ID from URL
+      const spreadsheetId = extractSpreadsheetId(spreadsheetUrl);
+      
+      if (spreadsheetId) {
+        chrome.storage.sync.set({
+          spreadsheetId: spreadsheetId,
+          sheetName: sheetName
+        }, function() {
+          alert('Settings saved successfully!');
+        });
+      } else {
+        alert('Please enter a valid Google Sheets URL');
+      }
+    });
+  }
+  
+  if (readSheetBtn) {
+    readSheetBtn.addEventListener('click', function() {
+      chrome.storage.sync.get(['spreadsheetId', 'sheetName'], function(result) {
+        if (result.spreadsheetId) {
+          readSheetData(result.spreadsheetId, result.sheetName);
+        } else {
+          alert('Please save your spreadsheet settings first');
+        }
+      });
+    });
+  }
+
+  // AI Settings
+  const saveAiSettingsBtn = document.getElementById('save-ai-settings');
+  const analyzeMessagesBtn = document.getElementById('analyze-messages');
+  
+  if (saveAiSettingsBtn) {
+    saveAiSettingsBtn.addEventListener('click', function() {
+      const aiApiKey = document.getElementById('ai-api-key').value.trim();
+      
+      if (aiApiKey) {
+        chrome.storage.sync.set({ aiApiKey: aiApiKey }, function() {
+          alert('AI settings saved successfully!');
+        });
+      } else {
+        alert('Please enter an AI API key');
+      }
+    });
+  }
+  
+  if (analyzeMessagesBtn) {
+    analyzeMessagesBtn.addEventListener('click', analyzeWhatsAppMessages);
+  }
+
+  // Google Sign-in
+  const googleSigninBtn = document.getElementById('google-signin');
+  if (googleSigninBtn) {
+    googleSigninBtn.addEventListener('click', function() {
+      chrome.identity.getAuthToken({ interactive: true }, function(token) {
+        if (chrome.runtime.lastError) {
+          console.error('Google sign-in failed:', chrome.runtime.lastError.message);
+          alert('Google sign-in failed: ' + chrome.runtime.lastError.message);
+        } else {
+          console.log('Google sign-in successful');
+          alert('Google sign-in successful!');
+        }
+      });
+    });
+  }
+
+  // Google Calendar & Docs
+  const testCalendarBtn = document.getElementById('test-calendar');
+  const testDocsBtn = document.getElementById('test-docs');
+  const createWeddingEventBtn = document.getElementById('create-wedding-event');
+  const createPlanningDocBtn = document.getElementById('create-planning-doc');
+  
+  if (testCalendarBtn) {
+    testCalendarBtn.addEventListener('click', testCalendarAccess);
+  }
+  
+  if (testDocsBtn) {
+    testDocsBtn.addEventListener('click', testDocsAccess);
+  }
+  
+  if (createWeddingEventBtn) {
+    createWeddingEventBtn.addEventListener('click', createWeddingEvent);
+  }
+  
+  if (createPlanningDocBtn) {
+    createPlanningDocBtn.addEventListener('click', createPlanningDocument);
+  }
+  
+  // Add event listener for test button
+  const runTestsBtn2 = document.getElementById('run-tests-btn');
+  if (runTestsBtn2) {
+    runTestsBtn2.addEventListener('click', function() {
+      const testResultsDiv = document.getElementById('test-results');
+      testResultsDiv.innerHTML = '<p>Running tests... Check console for results.</p>';
+      
+      // Capture console output for test results
+      const originalLog = console.log;
+      const testOutput = [];
+      console.log = function(...args) {
+        testOutput.push(args.join(' '));
+        originalLog.apply(console, args);
+      };
+      
+      // Run tests
+      setTimeout(() => {
+        window.runAllTests();
+        
+        // Restore console and show results
+        console.log = originalLog;
+        testResultsDiv.innerHTML = `
+          <div style="background: #f0f8ff; padding: 8px; border-radius: 4px; margin-top: 8px; color: #333;">
+            <strong>Test Results:</strong><br>
+            <small>Check browser console for detailed results.</small><br>
+            <small>Tests completed!</small>
+          </div>
+        `;
+      }, 100);
+    });
+  }
 });
 
 // Show specific step in the wizard
@@ -173,15 +460,15 @@ function analyzeHeaders(headers) {
   
   // Determine name format
   if (analysis.hasFirstNameColumn && analysis.hasLastNameColumn) {
-    suggestions.push(`📋 Name format detected: Separate first and last name columns`);
+            suggestions.push(`Name format detected: Separate first and last name columns`);
   } else if (analysis.hasFullNameColumn) {
-    suggestions.push(`📋 Name format detected: Combined full name column`);
+            suggestions.push(`Name format detected: Combined full name column`);
   } else {
-    suggestions.push(`⚠️ No clear name columns found. Please check your column headers.`);
+            suggestions.push(`No clear name columns found. Please check your column headers.`);
   }
   
   if (!analysis.hasRSVPResponseColumn) {
-    suggestions.push(`⚠️ No RSVP response column found. Consider adding a "RSVP Response" or "Message" column.`);
+            suggestions.push(`No RSVP response column found. Consider adding a "RSVP Response" or "Message" column.`);
   }
   
   analysis.suggestions = suggestions;
@@ -222,7 +509,7 @@ function analyzeMultiRowStructure(rows) {
   if (analysis.potentialHeaderRows.length > 0) {
     const bestRow = analysis.potentialHeaderRows[0];
     suggestions.push(`🎯 Suggested header row: Row ${bestRow.rowIndex + 1} (score: ${bestRow.score})`);
-    suggestions.push(`📋 Headers: ${bestRow.headers.join(', ')}`);
+            suggestions.push(`Headers: ${bestRow.headers.join(', ')}`);
     
     // Analyze the best row for RSVP columns
     const headerAnalysis = analyzeHeaders(bestRow.headers);
@@ -232,7 +519,7 @@ function analyzeMultiRowStructure(rows) {
     analysis.hasResponseColumn = headerAnalysis.hasResponseColumn;
     analysis.hasDateColumn = headerAnalysis.hasDateColumn;
   } else {
-    suggestions.push('⚠️ No clear header row found. Please manually select the row with column names.');
+            suggestions.push('No clear header row found. Please manually select the row with column names.');
   }
   
   analysis.suggestions = suggestions;
@@ -370,15 +657,18 @@ function populateHeaderRowSelector(rows) {
   });
 }
 
-// Add event listener for refresh analysis button
-document.getElementById('refresh-analysis').addEventListener('click', function() {
-  const selectedRowIndex = document.getElementById('header-row-selector').value;
-  if (selectedRowIndex) {
-    refreshAnalysisWithHeaderRow(parseInt(selectedRowIndex));
-  } else {
-    alert('Please select a header row first.');
+  // Add event listener for refresh analysis button (only if element exists)
+  const refreshAnalysisBtn = document.getElementById('refresh-analysis');
+  if (refreshAnalysisBtn) {
+    refreshAnalysisBtn.addEventListener('click', function() {
+      const selectedRowIndex = document.getElementById('header-row-selector').value;
+      if (selectedRowIndex) {
+        refreshAnalysisWithHeaderRow(parseInt(selectedRowIndex));
+      } else {
+        alert('Please select a header row first.');
+      }
+    });
   }
-});
 
 // Refresh analysis with selected header row
 function refreshAnalysisWithHeaderRow(rowIndex) {
@@ -818,13 +1108,123 @@ ${response.replies.join('\n')}`;
           
         } catch (error) {
           console.error('Analysis error:', error);
-          const aiAnalysisDiv = document.getElementById('ai-analysis');
-          aiAnalysisDiv.innerHTML = `<p style="color: red;">Error analyzing messages: ${error.message}</p>`;
+          const aiResultsDiv = document.getElementById('ai-results');
+          aiResultsDiv.innerHTML = `<p style="color: red;">Error analyzing messages: ${error.message}</p>`;
         }
       });
     });
   });
 });
+
+// Main function to analyze WhatsApp messages and update RSVP
+async function analyzeWhatsAppMessages() {
+  try {
+    // Check if we're on WhatsApp Web
+    chrome.tabs.query({active: true, currentWindow: true}, function(tabs) {
+      const currentTab = tabs[0];
+      if (!currentTab.url.includes('web.whatsapp.com')) {
+        const aiResultsDiv = document.getElementById('ai-results');
+        if (aiResultsDiv) {
+          aiResultsDiv.innerHTML = '<p style="color: red;">Please open WhatsApp Web first.</p>';
+        }
+        return;
+      }
+
+      // Send message to content script to get messages
+      chrome.tabs.sendMessage(currentTab.id, {action: "getMessages"}, async function(response) {
+        if (chrome.runtime.lastError) {
+          console.error('Error communicating with content script:', chrome.runtime.lastError);
+          const aiResultsDiv = document.getElementById('ai-results');
+          if (aiResultsDiv) {
+            aiResultsDiv.innerHTML = '<p style="color: red;">Error: Could not communicate with WhatsApp Web. Please refresh the page.</p>';
+          }
+          return;
+        }
+
+        if (!response || !response.replies || response.replies.length === 0) {
+          const aiResultsDiv = document.getElementById('ai-results');
+          if (aiResultsDiv) {
+            aiResultsDiv.innerHTML = '<p style="color: red;">No WhatsApp messages found.</p>';
+          }
+          return;
+        }
+
+        console.log('WhatsApp messages received:', response);
+
+        // Step 1: Extract names from invitation message
+        const extractedNames = response.extractedNames || [];
+        
+        if (extractedNames.length === 0) {
+          const aiResultsDiv = document.getElementById('ai-results');
+          if (aiResultsDiv) {
+            aiResultsDiv.innerHTML = '<p style="color: red;">No names extracted from invitation. Please check your invitation message format.</p>';
+          }
+          return;
+        }
+
+        console.log('Extracted names:', extractedNames);
+
+        // Step 2: Analyze RSVP responses with AI
+        try {
+          // Get AI API key
+          chrome.storage.sync.get(['aiApiKey'], async function(result) {
+            const apiKey = result.aiApiKey;
+            if (!apiKey) {
+              const aiResultsDiv = document.getElementById('ai-results');
+              if (aiResultsDiv) {
+                aiResultsDiv.innerHTML = '<p style="color: red;">Please configure your AI API key in settings.</p>';
+              }
+              return;
+            }
+
+            // Build AI prompt for RSVP analysis
+            const aiPrompt = `Analyze the following WhatsApp RSVP responses and determine if they indicate YES, NO, or UNSURE for attending a wedding.
+
+Responses to analyze:
+${response.replies.join('\n')}
+
+Please respond in this exact format:
+RSVP_STATUS: [YES/NO/UNSURE]
+RESPONSE: [Brief explanation of the response]
+CONFIDENCE: [HIGH/MEDIUM/LOW]
+
+Focus on:
+- "1" or "I'm coming" = YES
+- "2" or "Sorry, can't come" = NO  
+- "Maybe" or unclear responses = UNSURE
+- Consider context and tone`;
+
+            console.log('Sending RSVP analysis prompt to AI:', aiPrompt);
+            
+            // Call AI for RSVP analysis only
+            const aiResult = await window.callAI(aiPrompt, apiKey);
+            
+            console.log('AI returned RSVP analysis:', aiResult);
+            
+            // Parse the AI result for RSVP status
+            const rsvpAnalysis = parseRSVPAnalysis(aiResult);
+            
+            // Step 3: Show results for user confirmation
+            showRSVPConfirmation(extractedNames, rsvpAnalysis, response.replies);
+            
+          });
+        } catch (error) {
+          console.error('Analysis error:', error);
+          const aiResultsDiv = document.getElementById('ai-results');
+          if (aiResultsDiv) {
+            aiResultsDiv.innerHTML = `<p style="color: red;">Error analyzing messages: ${error.message}</p>`;
+          }
+        }
+      });
+    });
+  } catch (error) {
+    console.error('Error in analyzeWhatsAppMessages:', error);
+    const aiResultsDiv = document.getElementById('ai-results');
+    if (aiResultsDiv) {
+      aiResultsDiv.innerHTML = `<p style="color: red;">Error: ${error.message}</p>`;
+    }
+  }
+}
 
 // Parse AI response for RSVP analysis only
 function parseRSVPAnalysis(aiResult) {
@@ -846,20 +1246,20 @@ function parseRSVPAnalysis(aiResult) {
 
 // Show RSVP confirmation interface
 function showRSVPConfirmation(names, rsvpAnalysis, originalMessages) {
-  const aiAnalysisDiv = document.getElementById('ai-analysis');
+  const aiResultsDiv = document.getElementById('ai-results');
   
   let displayHTML = `
-    <h4>📋 Extracted Names:</h4>
+    <h4>Extracted Names:</h4>
     <p>${names.join(', ')}</p>
     
-    <h4>🤖 AI RSVP Analysis:</h4>
+    <h4>AI RSVP Analysis:</h4>
     <div style="margin: 8px 0; padding: 8px; background: #f0f8ff; border-left: 4px solid #0066cc;">
       <strong>Status:</strong> ${rsvpAnalysis.status || 'UNSURE'}<br>
       <strong>Response:</strong> ${rsvpAnalysis.response || 'No clear response detected'}<br>
       <strong>Confidence:</strong> ${rsvpAnalysis.confidence || 'LOW'}
     </div>
     
-    <h4>✏️ Confirm & Edit:</h4>
+    <h4>Confirm & Edit:</h4>
   `;
   
   // Create editable entries for each name
@@ -879,7 +1279,7 @@ function showRSVPConfirmation(names, rsvpAnalysis, originalMessages) {
     `;
   });
   
-  aiAnalysisDiv.innerHTML = displayHTML;
+  aiResultsDiv.innerHTML = displayHTML;
   
   // Add event listeners after the HTML is inserted
   addRSVPConfirmationEventListeners();
@@ -921,12 +1321,9 @@ async function updateGuestRSVP(index) {
     // Show success message
     const button = document.querySelector(`[data-index="${index}"].update-rsvp-btn`);
     if (button) {
-      button.textContent = '✅ Updated!';
-      button.style.background = '#4caf50';
-      setTimeout(() => {
-        button.textContent = 'Update RSVP';
-        button.style.background = '#4caf50';
-      }, 2000);
+      button.textContent = 'RSVP Updated';
+      button.style.background = '#45a049';
+      button.disabled = true;
     }
     
   } catch (error) {

@@ -55,19 +55,20 @@ const testData = {
 
 // Test functions
 function runAllTests() {
-  console.log('🧪 Starting WedConnect Test Suite...\n');
+  console.log('Starting WedConnect Test Suite...\n');
   
   testNameExtraction();
   testRSVPAnalysis();
   testSheetOperations();
   testErrorHandling();
+  testUIElements();
   
   console.log('\n✅ All tests completed!');
 }
 
 // Test 1: Name extraction from invitation messages
 function testNameExtraction() {
-  console.log('📋 Test 1: Name Extraction from Invitation Messages');
+  console.log('Test 1: Name Extraction from Invitation Messages');
   
   testData.invitationMessages.forEach((message, index) => {
     console.log(`\nTest ${index + 1}: "${message.substring(0, 50)}..."`);
@@ -90,7 +91,7 @@ function testNameExtraction() {
 
 // Test 2: RSVP analysis
 function testRSVPAnalysis() {
-  console.log('\n🤖 Test 2: RSVP Analysis');
+  console.log('\nTest 2: RSVP Analysis');
   
   testData.rsvpResponses.forEach((response, index) => {
     console.log(`\nTest ${index + 1}: "${response}"`);
@@ -114,7 +115,7 @@ function testRSVPAnalysis() {
 
 // Test 3: Sheet operations
 function testSheetOperations() {
-  console.log('\n📊 Test 3: Sheet Operations');
+  console.log('\nTest 3: Sheet Operations');
   
   const testCases = [
     {
@@ -159,7 +160,7 @@ function testSheetOperations() {
 
 // Test 4: Error handling
 function testErrorHandling() {
-  console.log('\n⚠️ Test 4: Error Handling');
+  console.log('\nTest 4: Error Handling');
   
   const errorCases = [
     {
@@ -193,6 +194,62 @@ function testErrorHandling() {
     
     if (!passed) {
       console.error(`❌ Error handling failed for scenario ${index + 1}`);
+    }
+  });
+}
+
+// Test 5: UI Elements (new test for updated UI)
+function testUIElements() {
+  console.log('\nTest 5: UI Elements');
+  
+  const uiTests = [
+    {
+      name: "Settings button exists",
+      element: "settings-btn",
+      expected: true
+    },
+    {
+      name: "Update RSVP button exists",
+      element: "update-rsvp",
+      expected: true
+    },
+    {
+      name: "AI results container exists",
+      element: "ai-results",
+      expected: true
+    },
+    {
+      name: "Settings menu exists",
+      element: "settings-menu",
+      expected: true
+    },
+    {
+      name: "Old fetch messages button is hidden",
+      element: "fetch-messages",
+      expected: false
+    }
+  ];
+  
+  uiTests.forEach((test, index) => {
+    console.log(`\nTest ${index + 1}: ${test.name}`);
+    
+    const element = document.getElementById(test.element);
+    const exists = element !== null;
+    const isHidden = element && element.style.display === 'none';
+    
+    let passed = false;
+    if (test.expected) {
+      passed = exists && !isHidden;
+    } else {
+      passed = !exists || isHidden;
+    }
+    
+    console.log(`Element exists: ${exists}`);
+    console.log(`Element hidden: ${isHidden}`);
+    console.log(`Result: ${passed ? '✅ PASS' : '❌ FAIL'}`);
+    
+    if (!passed) {
+      console.error(`❌ UI element test failed for ${test.name}`);
     }
   });
 }
@@ -252,4 +309,5 @@ window.runAllTests = runAllTests;
 window.testNameExtraction = testNameExtraction;
 window.testRSVPAnalysis = testRSVPAnalysis;
 window.testSheetOperations = testSheetOperations;
-window.testErrorHandling = testErrorHandling; 
+window.testErrorHandling = testErrorHandling;
+window.testUIElements = testUIElements; 
