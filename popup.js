@@ -868,18 +868,40 @@ function showRSVPConfirmation(names, rsvpAnalysis, originalMessages) {
       <div style="margin: 8px 0; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
         <strong>Guest ${index + 1}:</strong><br>
         <input type="text" id="guest-name-${index}" value="${name}" style="width: 200px; padding: 4px; margin: 4px 0;">
-        <button onclick="searchGuestName(${index})" style="margin-left: 4px; padding: 4px 8px;">Search</button><br>
+        <button class="search-guest-btn" data-index="${index}" style="margin-left: 4px; padding: 4px 8px;">Search</button><br>
         <select id="guest-rsvp-${index}" style="margin: 4px 0; padding: 4px;">
           <option value="YES" ${rsvpAnalysis.status === 'YES' ? 'selected' : ''}>YES - Attending</option>
           <option value="NO" ${rsvpAnalysis.status === 'NO' ? 'selected' : ''}>NO - Not Attending</option>
           <option value="UNSURE" ${rsvpAnalysis.status === 'UNSURE' ? 'selected' : ''}>UNSURE - Needs Follow-up</option>
         </select>
-        <button onclick="updateGuestRSVP(${index})" style="margin-left: 8px; padding: 4px 8px; background: #4caf50; color: white; border: none; border-radius: 3px;">Update RSVP</button>
+        <button class="update-rsvp-btn" data-index="${index}" style="margin-left: 8px; padding: 4px 8px; background: #4caf50; color: white; border: none; border-radius: 3px;">Update RSVP</button>
       </div>
     `;
   });
   
   aiAnalysisDiv.innerHTML = displayHTML;
+  
+  // Add event listeners after the HTML is inserted
+  addRSVPConfirmationEventListeners();
+}
+
+// Add event listeners for RSVP confirmation buttons
+function addRSVPConfirmationEventListeners() {
+  // Add event listeners for search buttons
+  document.querySelectorAll('.search-guest-btn').forEach(button => {
+    button.addEventListener('click', function() {
+      const index = this.getAttribute('data-index');
+      searchGuestName(index);
+    });
+  });
+  
+  // Add event listeners for update RSVP buttons
+  document.querySelectorAll('.update-rsvp-btn').forEach(button => {
+    button.addEventListener('click', function() {
+      const index = this.getAttribute('data-index');
+      updateGuestRSVP(index);
+    });
+  });
 }
 
 // Update guest RSVP in sheet
@@ -897,13 +919,15 @@ async function updateGuestRSVP(index) {
     await updateSheet(name, rsvpStatus);
     
     // Show success message
-    const button = event.target;
-    button.textContent = '✅ Updated!';
-    button.style.background = '#4caf50';
-    setTimeout(() => {
-      button.textContent = 'Update RSVP';
+    const button = document.querySelector(`[data-index="${index}"].update-rsvp-btn`);
+    if (button) {
+      button.textContent = '✅ Updated!';
       button.style.background = '#4caf50';
-    }, 2000);
+      setTimeout(() => {
+        button.textContent = 'Update RSVP';
+        button.style.background = '#4caf50';
+      }, 2000);
+    }
     
   } catch (error) {
     console.error('Error updating guest RSVP:', error);
@@ -949,8 +973,10 @@ async function updateSheet(name, status) {
           const nameParts = name.trim().split(' ');
           firstName = nameParts[0] || '';
           lastName = nameParts.slice(1).join(' ') || '';
+          console.log(`Searching for separate names: First="${firstName}", Last="${lastName}"`);
         } else {
           fullName = name;
+          console.log(`Searching for full name: "${fullName}"`);
         }
         
         // Map AI status to configured dropdown value
@@ -966,97 +992,119 @@ async function updateSheet(name, status) {
           rsvpValue = status;
         }
         
-        // Find the next empty row (ensure it's after headers)
-        const headerRowIndex = config.headerRowIndex || 0;
-        const nextEmptyRow = await window.findNextEmptyRow(token, result.spreadsheetId, sheetName, headerRowIndex + 1);
+        // Find the existing row(s) for this guest name
+        const existingRows = await findGuestRows(token, result.spreadsheetId, sheetName, config, name, firstName, lastName, fullName);
         
-        // Verify the row is after headers and not the header row itself
-        if (nextEmptyRow <= headerRowIndex) {
-          throw new Error(`Invalid row calculation: next empty row (${nextEmptyRow}) must be after header row (${headerRowIndex + 1})`);
+        if (existingRows.length === 0) {
+          alert(`Guest "${name}" not found in the sheet. Please check the spelling or add them manually.`);
+          return;
         }
         
-        console.log(`Header row: ${headerRowIndex + 1}, Next empty row: ${nextEmptyRow}`);
+        console.log(`Found ${existingRows.length} row(s) for guest "${name}":`, existingRows);
         
-        // Build the data array based on configured columns
-        const rowData = [];
-        const columns = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J']; // Support up to 10 columns
-        
-        // Find the highest column index needed
-        const columnIndices = [];
-        if (config.nameFormat === 'separate') {
-          columnIndices.push(columns.indexOf(config.firstNameColumn));
-          columnIndices.push(columns.indexOf(config.lastNameColumn));
-        } else {
-          columnIndices.push(columns.indexOf(config.fullNameColumn));
-        }
-        columnIndices.push(columns.indexOf(config.rsvpResponseColumn));
-        
-        console.log('Column configuration:', {
-          nameFormat: config.nameFormat,
-          firstNameColumn: config.firstNameColumn,
-          lastNameColumn: config.lastNameColumn,
-          fullNameColumn: config.fullNameColumn,
-          rsvpResponseColumn: config.rsvpResponseColumn,
-          columnIndices: columnIndices
-        });
-        
-        const filteredIndices = columnIndices.filter(i => i >= 0);
-        const maxColumnIndex = Math.max(...filteredIndices);
-        
-        console.log('Column calculation:', {
-          columnIndices: columnIndices,
-          filteredIndices: filteredIndices,
-          maxColumnIndex: maxColumnIndex
-        });
-        
-        // Ensure we have valid column indices
-        if (filteredIndices.length === 0 || maxColumnIndex < 0) {
-          throw new Error('No valid column indices found. Please check your column configuration.');
-        }
-        
-        // Use the next empty row for data insertion
-        const range = `${sheetName}!A${nextEmptyRow}:${columns[maxColumnIndex]}${nextEmptyRow}`;
-        
-        console.log(`Inserting data at range: ${range}`);
-        
-        // Build data row with proper column mapping
-        for (let i = 0; i <= maxColumnIndex; i++) {
-          const columnLetter = columns[i];
-          let value = '';
+        // Update RSVP response in each found row
+        for (const rowNumber of existingRows) {
+          const rsvpColumnLetter = config.rsvpResponseColumn;
+          const range = `${sheetName}!${rsvpColumnLetter}${rowNumber}`;
           
-          if (config.nameFormat === 'separate') {
-            if (columnLetter === config.firstNameColumn) {
-              value = firstName;
-            } else if (columnLetter === config.lastNameColumn) {
-              value = lastName;
-            }
-          } else {
-            if (columnLetter === config.fullNameColumn) {
-              value = fullName;
-            }
+          console.log(`Updating RSVP at range: ${range} with value: ${rsvpValue}`);
+          
+          try {
+            const updateResult = await window.updateSheetData(token, result.spreadsheetId, range, [[rsvpValue]]);
+            console.log(`Update result for row ${rowNumber}:`, updateResult);
+          } catch (error) {
+            console.error(`Error updating row ${rowNumber}:`, error);
+            alert(`Error updating RSVP for row ${rowNumber}: ${error.message}`);
+            return;
           }
-          
-          if (columnLetter === config.rsvpResponseColumn) {
-            value = rsvpValue;
-          }
-          
-          rowData.push(value);
         }
         
-        console.log(`Data to insert:`, rowData);
+        alert(`✅ Updated RSVP for "${name}" to "${rsvpValue}" in ${existingRows.length} row(s)`);
         
-        try {
-          const updateResult = await window.updateSheetData(token, result.spreadsheetId, range, [rowData]);
-          console.log(`Update result:`, updateResult);
-          alert(`Added ${name} with RSVP status: ${rsvpValue} to row ${nextEmptyRow}`);
-        } catch (error) {
-          console.error('Update failed:', error);
-          alert('Error updating sheet: ' + error.message);
-        }
       });
     });
   } catch (error) {
     alert('Error: ' + error.message);
+  }
+}
+
+// Find existing rows for a guest name
+async function findGuestRows(token, spreadsheetId, sheetName, config, fullName, firstName, lastName, fullNameParam) {
+  try {
+    console.log(`Searching for guest: "${fullName}"`);
+    console.log(`Name format: ${config.nameFormat}`);
+    console.log(`First name column: ${config.firstNameColumn}, Last name column: ${config.lastNameColumn}, Full name column: ${config.fullNameColumn}`);
+    
+    // Get all data from the sheet
+    const response = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${encodeURIComponent(sheetName)}!A:Z`, {
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      }
+    });
+    
+    if (!response.ok) {
+      throw new Error(`Failed to read sheet: ${response.status} ${response.statusText}`);
+    }
+    
+    const data = await response.json();
+    
+    if (!data.values || data.values.length === 0) {
+      console.log('No data found in sheet');
+      return [];
+    }
+    
+    const headerRowIndex = config.headerRowIndex || 0;
+    const foundRows = [];
+    
+    console.log(`Searching rows ${headerRowIndex + 1} to ${data.values.length}`);
+    
+    // Search through all rows after the header
+    for (let i = headerRowIndex + 1; i < data.values.length; i++) {
+      const row = data.values[i];
+      let rowName = '';
+      let rowFirstName = '';
+      let rowLastName = '';
+      
+      if (config.nameFormat === 'separate') {
+        const firstNameCol = config.firstNameColumn ? config.firstNameColumn.charCodeAt(0) - 65 : 0;
+        const lastNameCol = config.lastNameColumn ? config.lastNameColumn.charCodeAt(0) - 65 : 0;
+        
+        rowFirstName = row[firstNameCol] || '';
+        rowLastName = row[lastNameCol] || '';
+        rowName = `${rowFirstName} ${rowLastName}`.trim();
+        
+        console.log(`Row ${i + 1}: First="${rowFirstName}", Last="${rowLastName}", Combined="${rowName}"`);
+        
+        // Compare first and last names separately, or combined name
+        const nameMatch = (rowFirstName.toLowerCase() === firstName.toLowerCase() && 
+                          rowLastName.toLowerCase() === lastName.toLowerCase()) ||
+                         (rowName.toLowerCase() === fullName.toLowerCase());
+        
+        if (nameMatch) {
+          foundRows.push(i + 1); // Convert to 1-based row number
+          console.log(`✅ Match found in row ${i + 1}`);
+        }
+      } else {
+        const fullNameCol = config.fullNameColumn ? config.fullNameColumn.charCodeAt(0) - 65 : 0;
+        rowName = row[fullNameCol] || '';
+        
+        console.log(`Row ${i + 1}: Full name="${rowName}"`);
+        
+        // Compare full names
+        if (rowName.toLowerCase() === fullName.toLowerCase()) {
+          foundRows.push(i + 1);
+          console.log(`✅ Match found in row ${i + 1}`);
+        }
+      }
+    }
+    
+    console.log(`Found rows for "${fullName}":`, foundRows);
+    return foundRows;
+    
+  } catch (error) {
+    console.error('Error finding guest rows:', error);
+    return [];
   }
 }
 
