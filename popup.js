@@ -1326,6 +1326,38 @@ document.addEventListener('DOMContentLoaded', function() {
   if (createPlanningDocBtn) {
     createPlanningDocBtn.addEventListener('click', createPlanningDocument);
   }
+  
+  // Add event listener for test button
+  const runTestsBtn = document.getElementById('run-tests');
+  if (runTestsBtn) {
+    runTestsBtn.addEventListener('click', function() {
+      const testResultsDiv = document.getElementById('test-results');
+      testResultsDiv.innerHTML = '<p>Running tests... Check console for results.</p>';
+      
+      // Capture console output for test results
+      const originalLog = console.log;
+      const testOutput = [];
+      console.log = function(...args) {
+        testOutput.push(args.join(' '));
+        originalLog.apply(console, args);
+      };
+      
+      // Run tests
+      setTimeout(() => {
+        window.runAllTests();
+        
+        // Restore console and show results
+        console.log = originalLog;
+        testResultsDiv.innerHTML = `
+          <div style="background: #f0f8ff; padding: 8px; border-radius: 4px; margin-top: 8px;">
+            <strong>Test Results:</strong><br>
+            <small>Check browser console for detailed results.</small><br>
+            <small>Tests completed! ✅</small>
+          </div>
+        `;
+      }, 100);
+    });
+  }
 });
 
 // Test Calendar access
