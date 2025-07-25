@@ -66,8 +66,9 @@
 <body>
   <div class="section">
     <h3>🎉 Welcome to WedConnect!</h3>
-    <div id="setup-status" class="setup-status warning">
-      <strong>Setup Required:</strong> Please configure your RSVP tracking system.
+    <div id="setup-status" class="setup-status success">
+      <strong>✅ Setup Complete:</strong> RSVP tracking is configured and ready to use!
+      <br><button id="reset-setup" style="margin-top: 8px; padding: 4px 8px; background: #f0f0f0; border: 1px solid #ccc; border-radius: 3px;">Reset Setup</button>
     </div>
     <button id="start-setup">Start RSVP Setup Wizard</button>
   </div>
@@ -107,7 +108,19 @@
         </div>
         
         <p><strong>RSVP Response Column:</strong> <select id="rsvp-response-column"></select></p>
-        <p><strong>Date Column:</strong> <select id="date-column"></select></p>
+        <button id="detect-dropdowns" style="margin-left: 8px; padding: 4px 8px; background: #e3f2fd; border: 1px solid #2196f3; border-radius: 3px;">Detect Dropdown Options</button>
+      </div>
+      
+      <div id="rsvp-mapping-config">
+        <h5>RSVP Response Mapping</h5>
+        <p><small>Configure how AI responses should map to your dropdown options:</small></p>
+        <div id="dropdown-options"></div>
+        <div id="ai-mapping">
+          <p><strong>AI Response Mapping:</strong></p>
+          <p>When AI detects "YES" → <select id="yes-mapping"></select></p>
+          <p>When AI detects "NO" → <select id="no-mapping"></select></p>
+          <p>When AI detects "UNSURE" → <select id="unsure-mapping"></select></p>
+        </div>
       </div>
       <button id="save-config">Save Configuration</button>
     </div>
@@ -151,6 +164,19 @@
     <div id="ai-analysis"></div>
   </div>
 
+  <div class="section">
+    <h3>Google Calendar & Docs</h3>
+    <button id="test-calendar">Test Calendar Access</button>
+    <button id="test-docs">Test Docs Access</button>
+    <button id="create-wedding-event">Create Wedding Event</button>
+    <button id="create-planning-doc">Create Planning Document</button>
+    <div id="calendar-docs-results"></div>
+  </div>
+
   <script src="popup.js"></script>
+  <script src="sheets.js"></script>
+  <script src="calendar.js"></script>
+  <script src="docs.js"></script>
+  <script src="aiProvider.js"></script>
 </body>
 </html> 

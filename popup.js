@@ -7,13 +7,25 @@ let rsvpConfig = {};
 document.addEventListener('DOMContentLoaded', function() {
   chrome.storage.sync.get(['rsvpConfig', 'spreadsheetId'], function(result) {
     if (result.rsvpConfig && result.spreadsheetId) {
-      // Setup is complete, hide onboarding
-      document.querySelector('.section:first-child').style.display = 'none';
+      // Setup is complete, hide onboarding but show reset button
       document.getElementById('onboarding-steps').style.display = 'none';
       updateSetupStatus('success', '✅ Setup Complete: RSVP tracking is configured and ready to use!');
+      
+      // Make sure reset button is visible
+      const resetBtn = document.getElementById('reset-setup');
+      if (resetBtn) {
+        resetBtn.style.display = 'inline-block';
+      }
     } else {
       // Setup required, show onboarding
       showStep(1);
+      updateSetupStatus('warning', 'Setup Required: Please configure your RSVP tracking system.');
+      
+      // Hide reset button if setup is not complete
+      const resetBtn = document.getElementById('reset-setup');
+      if (resetBtn) {
+        resetBtn.style.display = 'none';
+      }
     }
   });
 });
@@ -71,15 +83,11 @@ async function analyzeSheetStructure(spreadsheetId) {
     
     window.authenticateWithGoogle(async function(token) {
       try {
-        // Get all sheet names and metadata
+        // Get all sheet names
         const sheetNames = await window.getAllSheetNames(token, spreadsheetId);
         
-        // Get sheet metadata to check for hidden columns
-        const metadata = await window.getSheetMetadata(token, spreadsheetId);
-        const firstSheet = sheetNames[0];
-        const sheetMetadata = metadata.sheets.find(sheet => sheet.properties.title === firstSheet);
-        
         // Get data from the first sheet - fetch more rows to analyze structure
+        const firstSheet = sheetNames[0];
         const sheetData = await window.getSheetData(token, spreadsheetId, firstSheet);
         
         if (!sheetData.values || sheetData.values.length === 0) {
@@ -87,40 +95,19 @@ async function analyzeSheetStructure(spreadsheetId) {
           return;
         }
         
-        // Filter out hidden columns
-        const visibleColumns = [];
-        if (sheetMetadata && sheetMetadata.properties.gridProperties) {
-          const columnCount = sheetMetadata.properties.gridProperties.columnCount;
-          for (let i = 0; i < columnCount; i++) {
-            const columnMetadata = sheetMetadata.properties.columnMetadata && 
-                                 sheetMetadata.properties.columnMetadata[i];
-            if (!columnMetadata || !columnMetadata.hiddenByUser) {
-              visibleColumns.push(i);
-            }
-          }
-        } else {
-          // If no metadata available, assume all columns are visible
-          visibleColumns.push(...Array.from({length: sheetData.values[0].length}, (_, i) => i));
-        }
-        
-        // Filter sheet data to only include visible columns
-        const filteredData = sheetData.values.map(row => 
-          visibleColumns.map(colIndex => row[colIndex] || '')
-        );
-        
-        // Store filtered sheet data globally for re-analysis
-        window.currentSheetData = filteredData;
-        window.visibleColumns = visibleColumns;
+        // Store sheet data globally for re-analysis
+        window.currentSheetData = sheetData.values;
+        window.currentSheetName = firstSheet; // Store the sheet name
         
         // Analyze the structure with multiple rows
-        const analysis = analyzeMultiRowStructure(filteredData);
+        const analysis = analyzeMultiRowStructure(sheetData.values);
         
         // Display analysis results
         document.getElementById('sheet-analysis').innerHTML = `
           <h5>Sheet Analysis Results:</h5>
           <p><strong>Sheet Name:</strong> ${firstSheet}</p>
-          <p><strong>Rows Found:</strong> ${filteredData.length}</p>
-          <p><strong>Visible Columns:</strong> ${visibleColumns.length} of ${sheetData.values[0].length}</p>
+          <p><strong>Rows Found:</strong> ${sheetData.values.length}</p>
+          <p><strong>Columns Found:</strong> ${sheetData.values[0].length}</p>
           <div class="setup-status ${analysis.suggestions.length > 0 ? 'success' : 'warning'}">
             <strong>Initial Analysis:</strong><br>
             ${analysis.suggestions.join('<br>')}
@@ -128,11 +115,11 @@ async function analyzeSheetStructure(spreadsheetId) {
         `;
         
         // Populate header row selector
-        populateHeaderRowSelector(filteredData);
+        populateHeaderRowSelector(sheetData.values);
         
         // Use the best suggested header row for initial column population
         const bestHeaderRow = analysis.potentialHeaderRows.length > 0 ? analysis.potentialHeaderRows[0].rowIndex : 0;
-        const bestHeaders = filteredData[bestHeaderRow];
+        const bestHeaders = sheetData.values[bestHeaderRow];
         populateColumnSelectors(bestHeaders, analysis);
         
         // Set the header row selector to the best suggested row
@@ -161,7 +148,6 @@ function analyzeHeaders(headers) {
     hasLastNameColumn: false,
     hasFullNameColumn: false,
     hasRSVPResponseColumn: false,
-    hasDateColumn: false,
     suggestions: []
   };
   
@@ -179,14 +165,9 @@ function analyzeHeaders(headers) {
       suggestions.push(`✅ Found full name column: "${header}"`);
     }
     
-    if (lowerHeader.includes('rsvp') || lowerHeader.includes('response') || lowerHeader.includes('message') || lowerHeader.includes('note')) {
+    if (lowerHeader.includes('rsvp') || lowerHeader.includes('response') || lowerHeader.includes('message') || lowerHeader.includes('note') || lowerHeader.includes('reply')) {
       analysis.hasRSVPResponseColumn = true;
       suggestions.push(`✅ Found RSVP response column: "${header}"`);
-    }
-    
-    if (lowerHeader.includes('date') || lowerHeader.includes('time')) {
-      analysis.hasDateColumn = true;
-      suggestions.push(`✅ Found date column: "${header}"`);
     }
   });
   
@@ -286,7 +267,7 @@ function calculateHeaderScore(row) {
 
 // Populate column selectors with suggestions
 function populateColumnSelectors(headers, analysis) {
-  const selectors = ['first-name-column', 'last-name-column', 'full-name-column', 'rsvp-response-column', 'date-column'];
+  const selectors = ['first-name-column', 'last-name-column', 'full-name-column', 'rsvp-response-column'];
   
   selectors.forEach(selectorId => {
     const select = document.getElementById(selectorId);
@@ -301,7 +282,7 @@ function populateColumnSelectors(headers, analysis) {
       select.appendChild(option);
     });
     
-    // Auto-select based on analysis
+    // Auto-select based on analysis with improved detection
     if (selectorId === 'first-name-column' && analysis.hasFirstNameColumn) {
       const firstNameIndex = headers.findIndex(h => h.toLowerCase().includes('first') && h.toLowerCase().includes('name'));
       if (firstNameIndex >= 0) select.selectedIndex = firstNameIndex + 1;
@@ -318,13 +299,16 @@ function populateColumnSelectors(headers, analysis) {
     }
     
     if (selectorId === 'rsvp-response-column' && analysis.hasRSVPResponseColumn) {
-      const rsvpIndex = headers.findIndex(h => h.toLowerCase().includes('rsvp') || h.toLowerCase().includes('response') || h.toLowerCase().includes('message'));
+      // Try multiple variations for RSVP response column
+      const rsvpVariations = ['rsvp', 'response', 'message', 'note', 'reply', 'comment'];
+      let rsvpIndex = -1;
+      
+      for (const variation of rsvpVariations) {
+        rsvpIndex = headers.findIndex(h => h.toLowerCase().includes(variation));
+        if (rsvpIndex >= 0) break;
+      }
+      
       if (rsvpIndex >= 0) select.selectedIndex = rsvpIndex + 1;
-    }
-    
-    if (selectorId === 'date-column' && analysis.hasDateColumn) {
-      const dateIndex = headers.findIndex(h => h.toLowerCase().includes('date') || h.toLowerCase().includes('time'));
-      if (dateIndex >= 0) select.selectedIndex = dateIndex + 1;
     }
   });
   
@@ -434,7 +418,7 @@ function saveRSVPConfiguration() {
   const config = {
     nameFormat: nameFormat,
     headerRowIndex: parseInt(document.getElementById('header-row-selector').value) || 0,
-    dateColumn: document.getElementById('date-column').value
+    sheetName: window.currentSheetName || 'Sheet1' // Save the sheet name that was analyzed
   };
   
   if (nameFormat === 'separate') {
@@ -461,6 +445,19 @@ function saveRSVPConfiguration() {
     return;
   }
   
+  // Save RSVP mapping configuration
+  config.rsvpMapping = {
+    yes: document.getElementById('yes-mapping').value,
+    no: document.getElementById('no-mapping').value,
+    unsure: document.getElementById('unsure-mapping').value
+  };
+  
+  // Validate mapping configuration
+  if (!config.rsvpMapping.yes || !config.rsvpMapping.no) {
+    alert('Please configure the RSVP response mapping for YES and NO responses.');
+    return;
+  }
+  
   chrome.storage.sync.set({ rsvpConfig: config }, function() {
     rsvpConfig = config;
     showStep(3);
@@ -479,24 +476,117 @@ async function testRSVPEntry() {
       
       window.authenticateWithGoogle(async function(token) {
         try {
-          // Test with sample data
-          const testData = [
-            ['Test Guest', 'YES', 'I\'m coming!', new Date().toISOString()]
-          ];
+          // First, check Google permissions
+          const hasGooglePermissions = await checkGooglePermissions();
+          if (!hasGooglePermissions) {
+            throw new Error('Google account permissions not granted. Please sign in again.');
+          }
           
-          const range = `Sheet1!${result.rsvpConfig.nameColumn}1:${result.rsvpConfig.dateColumn}1`;
-          await window.updateSheetData(token, result.spreadsheetId, range, testData);
+          // Then, test if we have write permissions to the spreadsheet
+          const hasPermissions = await window.testWritePermissions(token, result.spreadsheetId);
+          if (!hasPermissions) {
+            throw new Error('No write permissions to the spreadsheet. Please check your Google account permissions.');
+          }
+          
+          const config = result.rsvpConfig;
+          
+          // Use the configured sheet name instead of getting it from API
+          const sheetName = config.sheetName || 'Sheet1';
+          console.log('Using configured sheet name:', sheetName);
+          
+          // Create test data based on name format
+          let testName = 'Test Guest';
+          let firstName = 'Test';
+          let lastName = 'Guest';
+          
+          // Map test status to configured dropdown value
+          let testStatus = 'YES';
+          let rsvpValue = '';
+          if (config.rsvpMapping && config.rsvpMapping.yes) {
+            rsvpValue = config.rsvpMapping.yes;
+          } else {
+            rsvpValue = testStatus;
+          }
+          
+          // Find the next empty row (ensure it's after headers)
+          const headerRowIndex = config.headerRowIndex || 0;
+          const nextEmptyRow = await window.findNextEmptyRow(token, result.spreadsheetId, sheetName, headerRowIndex + 1);
+          
+          // Verify the row is after headers and not the header row itself
+          if (nextEmptyRow <= headerRowIndex) {
+            throw new Error(`Invalid row calculation: next empty row (${nextEmptyRow}) must be after header row (${headerRowIndex + 1})`);
+          }
+          
+          console.log(`Header row: ${headerRowIndex + 1}, Next empty row: ${nextEmptyRow}`);
+          
+          // Build the data array based on configured columns
+          const rowData = [];
+          const columns = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J']; // Support up to 10 columns
+          
+          // Find the highest column index needed
+          const columnIndices = [];
+          if (config.nameFormat === 'separate') {
+            columnIndices.push(columns.indexOf(config.firstNameColumn));
+            columnIndices.push(columns.indexOf(config.lastNameColumn));
+          } else {
+            columnIndices.push(columns.indexOf(config.fullNameColumn));
+          }
+          columnIndices.push(columns.indexOf(config.rsvpResponseColumn));
+          
+          const filteredIndices = columnIndices.filter(i => i >= 0);
+          const maxColumnIndex = Math.max(...filteredIndices);
+          
+          // Use the next empty row for data insertion
+          const range = `${sheetName}!A${nextEmptyRow}:${columns[maxColumnIndex]}${nextEmptyRow}`;
+          
+          console.log(`Inserting test data at range: ${range}`);
+          
+          // Build data row with proper column mapping
+          for (let i = 0; i <= maxColumnIndex; i++) {
+            const columnLetter = columns[i];
+            let value = '';
+            
+            if (config.nameFormat === 'separate') {
+              if (columnLetter === config.firstNameColumn) {
+                value = firstName;
+              } else if (columnLetter === config.lastNameColumn) {
+                value = lastName;
+              }
+            } else {
+              if (columnLetter === config.fullNameColumn) {
+                value = testName;
+              }
+            }
+            
+            if (columnLetter === config.rsvpResponseColumn) {
+              value = rsvpValue;
+            }
+            
+            rowData.push(value);
+          }
+          
+          console.log(`Test data to insert:`, rowData);
+          
+          const updateResult = await window.updateSheetData(token, result.spreadsheetId, range, [rowData]);
+          console.log(`Update result:`, updateResult);
           
           document.getElementById('test-results').innerHTML = `
             <div class="setup-status success">
               ✅ Test successful! A test entry was added to your sheet.
+              <br><strong>Test Data:</strong>
+              <br>• Name: ${config.nameFormat === 'separate' ? `${firstName} ${lastName}` : testName}
+              <br>• RSVP Status: ${rsvpValue}
+              <br>• Row: ${nextEmptyRow} (after header row ${headerRowIndex + 1})
+              <br>• Range: ${range}
               <br><small>You can delete this test entry from your sheet.</small>
             </div>
           `;
         } catch (error) {
+          console.error('Test failed:', error);
           document.getElementById('test-results').innerHTML = `
             <div class="setup-status error">
               ❌ Test failed: ${error.message}
+              <br><small>Check the console for more details.</small>
             </div>
           `;
         }
@@ -512,9 +602,14 @@ function finishSetup() {
   chrome.storage.sync.get(['rsvpConfig', 'spreadsheetId'], function(result) {
     if (result.rsvpConfig && result.spreadsheetId) {
       // Hide onboarding and show main interface
-      document.querySelector('.section:first-child').style.display = 'none';
       document.getElementById('onboarding-steps').style.display = 'none';
       updateSetupStatus('success', '✅ Setup Complete: RSVP tracking is configured and ready to use!');
+      
+      // Make sure reset button is visible
+      const resetBtn = document.getElementById('reset-setup');
+      if (resetBtn) {
+        resetBtn.style.display = 'inline-block';
+      }
     } else {
       alert('Please complete the setup first.');
     }
@@ -644,6 +739,9 @@ document.getElementById('analyze-messages').addEventListener('click', function()
     
     chrome.tabs.sendMessage(tabs[0].id, { action: 'getMessages' }, async function (response) {
       console.log('Analyze received response:', response);
+      console.log('Invitation message:', response?.invitationMessage);
+      console.log('Extracted names:', response?.extractedNames);
+      console.log('Replies:', response?.replies);
       
       if (chrome.runtime.lastError) {
         console.error('Runtime error:', chrome.runtime.lastError);
@@ -651,10 +749,28 @@ document.getElementById('analyze-messages').addEventListener('click', function()
         return;
       }
       
-      if (!response || !response.messages || response.messages.length === 0) {
-        alert('No WhatsApp messages found.');
+      if (!response || !response.invitationMessage) {
+        console.log('No wedding invitation message found');
+        alert('No wedding invitation message found. Please make sure you have sent a message starting with "The Wedding of" in this chat.');
         return;
       }
+      
+      if (!response.extractedNames || response.extractedNames.length === 0) {
+        console.log('No names extracted from invitation');
+        alert('No guest names found in the wedding invitation. Please check if the invitation contains names after "Dearest" or "Dear".');
+        return;
+      }
+      
+      if (!response.replies || response.replies.length === 0) {
+        console.log('No replies found');
+        alert('No replies found after the wedding invitation. Please wait for guests to respond.');
+        return;
+      }
+      
+      // Log the actual data being processed
+      console.log('Processing invitation:', response.invitationMessage);
+      console.log('Processing names:', response.extractedNames);
+      console.log('Processing replies:', response.replies);
       
       // Get AI API key
       chrome.storage.sync.get(['aiApiKey'], async function(result) {
@@ -665,125 +781,142 @@ document.getElementById('analyze-messages').addEventListener('click', function()
         }
         
         try {
-          console.log('Starting AI analysis with messages:', response.messages);
+          console.log('Starting analysis with replies:', response.replies);
           
-          // Build prompt for RSVP detection with better structure
-          const prompt = `You are an RSVP assistant for a wedding. Analyze the following WhatsApp messages and determine if they are RSVP responses.
+          // Step 1: Names are already extracted from the invitation message
+          const extractedNames = response.extractedNames;
+          console.log('Using extracted names:', extractedNames);
+          
+          // Step 2: Use AI only for RSVP analysis of the replies
+          const aiPrompt = `You are an RSVP assistant for a wedding. The guests were given a prompt to reply to confirm their attendance to a wedding:
 
-For each message, provide a structured response in this format:
+1. I'm coming!
+2. Sorry, I can't come.
+
+Previous responses to this have been just a number 1 or 2 (corresponding to the numbers in the options given above) or text like "i'm coming" or "i can't come I'm sorry". 
+
+Analyze the following messages and provide analysis on whether this is a reply to the RSVP and, if so, whether this person likely RSVP'd yes or no. Provide a structured response in this format:
 RSVP_STATUS: [YES/NO/UNSURE]
-NAME: [Extracted name or "Unknown"]
 RESPONSE: [Brief summary of their response]
 CONFIDENCE: [HIGH/MEDIUM/LOW]
 
-If multiple messages, analyze each separately and separate with "---".
-
 Messages to analyze:
-${response.messages.join('\n')}`;
+${response.replies.join('\n')}`;
           
-          console.log('Sending prompt to AI:', prompt);
+          console.log('Sending RSVP analysis prompt to AI:', aiPrompt);
           
-          // Call AI
-          const aiResult = await window.callAI(prompt, apiKey);
+          // Call AI for RSVP analysis only
+          const aiResult = await window.callAI(aiPrompt, apiKey);
           
-          console.log('AI returned result:', aiResult);
+          console.log('AI returned RSVP analysis:', aiResult);
           
-          // Parse the AI result and suggest actions
-          const parsedResult = parseAIResponse(aiResult);
+          // Parse the AI result for RSVP status
+          const rsvpAnalysis = parseRSVPAnalysis(aiResult);
           
-          // Show result in dedicated AI analysis section
-          const aiAnalysisDiv = document.getElementById('ai-analysis');
-          if (aiResult && aiResult.trim()) {
-            let displayHTML = `<h4>AI Analysis:</h4><pre>${aiResult}</pre>`;
-            
-            if (parsedResult.length > 0) {
-              displayHTML += `<h4>Suggested Actions:</h4>`;
-              parsedResult.forEach((result, index) => {
-                if (result.status === 'YES') {
-                  displayHTML += `<div style="margin: 8px 0; padding: 8px; background: #e8f5e8; border-left: 4px solid #4caf50;">
-                    <strong>✅ RSVP YES</strong><br>
-                    Name: ${result.name}<br>
-                    Response: ${result.response}<br>
-                    <button class="action-btn" data-action="update-sheet" data-name="${result.name}" data-status="YES" style="margin-top: 4px;">Add to Sheet as Attending</button>
-                  </div>`;
-                } else if (result.status === 'NO') {
-                  displayHTML += `<div style="margin: 8px 0; padding: 8px; background: #ffeaea; border-left: 4px solid #f44336;">
-                    <strong>❌ RSVP NO</strong><br>
-                    Name: ${result.name}<br>
-                    Response: ${result.response}<br>
-                    <button class="action-btn" data-action="update-sheet" data-name="${result.name}" data-status="NO" style="margin-top: 4px;">Add to Sheet as Not Attending</button>
-                  </div>`;
-                } else {
-                  displayHTML += `<div style="margin: 8px 0; padding: 8px; background: #fff3cd; border-left: 4px solid #ffc107;">
-                    <strong>❓ UNSURE</strong><br>
-                    Name: ${result.name}<br>
-                    Response: ${result.response}<br>
-                    <button class="action-btn" data-action="flag-review" data-name="${result.name}" data-response="${result.response}" style="margin-top: 4px;">Flag for Manual Review</button>
-                  </div>`;
-                }
-              });
-            }
-            
-            aiAnalysisDiv.innerHTML = displayHTML;
-            
-            // Add event listeners to the buttons
-            aiAnalysisDiv.addEventListener('click', function(e) {
-              if (e.target.classList.contains('action-btn')) {
-                const action = e.target.dataset.action;
-                const name = e.target.dataset.name;
-                const status = e.target.dataset.status;
-                const response = e.target.dataset.response;
-                
-                if (action === 'update-sheet') {
-                  updateSheet(name, status);
-                } else if (action === 'flag-review') {
-                  flagForReview(name, response);
-                }
-              }
-            });
-            
-            console.log('Displayed AI result in popup');
-          } else {
-            aiAnalysisDiv.innerHTML = '<p>No analysis result received from AI.</p>';
-            console.log('No AI result to display');
-          }
+          // Step 3: Show results for user confirmation
+          showRSVPConfirmation(extractedNames, rsvpAnalysis, response.replies);
+          
         } catch (error) {
-          console.error('AI analysis error:', error);
+          console.error('Analysis error:', error);
           const aiAnalysisDiv = document.getElementById('ai-analysis');
           aiAnalysisDiv.innerHTML = `<p style="color: red;">Error analyzing messages: ${error.message}</p>`;
         }
       });
     });
   });
-}); 
+});
 
-// Parse AI response into structured data
-function parseAIResponse(aiResult) {
-  const results = [];
-  const sections = aiResult.split('---').map(s => s.trim()).filter(s => s);
+// Parse AI response for RSVP analysis only
+function parseRSVPAnalysis(aiResult) {
+  const lines = aiResult.split('\n').map(line => line.trim()).filter(line => line);
+  const result = {};
   
-  sections.forEach(section => {
-    const lines = section.split('\n').map(line => line.trim()).filter(line => line);
-    const result = {};
-    
-    lines.forEach(line => {
-      if (line.startsWith('RSVP_STATUS:')) {
-        result.status = line.split(':')[1].trim();
-      } else if (line.startsWith('NAME:')) {
-        result.name = line.split(':')[1].trim();
-      } else if (line.startsWith('RESPONSE:')) {
-        result.response = line.split(':')[1].trim();
-      } else if (line.startsWith('CONFIDENCE:')) {
-        result.confidence = line.split(':')[1].trim();
-      }
-    });
-    
-    if (result.status) {
-      results.push(result);
+  lines.forEach(line => {
+    if (line.startsWith('RSVP_STATUS:')) {
+      result.status = line.split(':')[1].trim();
+    } else if (line.startsWith('RESPONSE:')) {
+      result.response = line.split(':')[1].trim();
+    } else if (line.startsWith('CONFIDENCE:')) {
+      result.confidence = line.split(':')[1].trim();
     }
   });
   
-  return results;
+  return result;
+}
+
+// Show RSVP confirmation interface
+function showRSVPConfirmation(names, rsvpAnalysis, originalMessages) {
+  const aiAnalysisDiv = document.getElementById('ai-analysis');
+  
+  let displayHTML = `
+    <h4>📋 Extracted Names:</h4>
+    <p>${names.join(', ')}</p>
+    
+    <h4>🤖 AI RSVP Analysis:</h4>
+    <div style="margin: 8px 0; padding: 8px; background: #f0f8ff; border-left: 4px solid #0066cc;">
+      <strong>Status:</strong> ${rsvpAnalysis.status || 'UNSURE'}<br>
+      <strong>Response:</strong> ${rsvpAnalysis.response || 'No clear response detected'}<br>
+      <strong>Confidence:</strong> ${rsvpAnalysis.confidence || 'LOW'}
+    </div>
+    
+    <h4>✏️ Confirm & Edit:</h4>
+  `;
+  
+  // Create editable entries for each name
+  names.forEach((name, index) => {
+    displayHTML += `
+      <div style="margin: 8px 0; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+        <strong>Guest ${index + 1}:</strong><br>
+        <input type="text" id="guest-name-${index}" value="${name}" style="width: 200px; padding: 4px; margin: 4px 0;">
+        <button onclick="searchGuestName(${index})" style="margin-left: 4px; padding: 4px 8px;">Search</button><br>
+        <select id="guest-rsvp-${index}" style="margin: 4px 0; padding: 4px;">
+          <option value="YES" ${rsvpAnalysis.status === 'YES' ? 'selected' : ''}>YES - Attending</option>
+          <option value="NO" ${rsvpAnalysis.status === 'NO' ? 'selected' : ''}>NO - Not Attending</option>
+          <option value="UNSURE" ${rsvpAnalysis.status === 'UNSURE' ? 'selected' : ''}>UNSURE - Needs Follow-up</option>
+        </select>
+        <button onclick="updateGuestRSVP(${index})" style="margin-left: 8px; padding: 4px 8px; background: #4caf50; color: white; border: none; border-radius: 3px;">Update RSVP</button>
+      </div>
+    `;
+  });
+  
+  aiAnalysisDiv.innerHTML = displayHTML;
+}
+
+// Update guest RSVP in sheet
+async function updateGuestRSVP(index) {
+  try {
+    const name = document.getElementById(`guest-name-${index}`).value.trim();
+    const rsvpStatus = document.getElementById(`guest-rsvp-${index}`).value;
+    
+    if (!name) {
+      alert('Please enter a name for this guest.');
+      return;
+    }
+    
+    // Use the existing updateSheet function
+    await updateSheet(name, rsvpStatus);
+    
+    // Show success message
+    const button = event.target;
+    button.textContent = '✅ Updated!';
+    button.style.background = '#4caf50';
+    setTimeout(() => {
+      button.textContent = 'Update RSVP';
+      button.style.background = '#4caf50';
+    }, 2000);
+    
+  } catch (error) {
+    console.error('Error updating guest RSVP:', error);
+    alert('Error updating RSVP: ' + error.message);
+  }
+}
+
+// Make the function available globally
+window.updateGuestRSVP = updateGuestRSVP;
+
+// Flag message for manual review
+function flagForReview(name, response) {
+  alert(`Flagged for review:\nName: ${name}\nResponse: ${response}\n\nPlease check this manually.`);
 }
 
 // Update Google Sheet with RSVP data
@@ -802,7 +935,10 @@ async function updateSheet(name, status) {
       
       window.authenticateWithGoogle(async function(token) {
         const config = result.rsvpConfig;
-        const sheetName = 'Sheet1'; // Default sheet name
+        
+        // Use the configured sheet name instead of getting it from API
+        const sheetName = config.sheetName || 'Sheet1';
+        console.log('Using configured sheet name:', sheetName);
         
         // Parse name into first and last name if needed
         let firstName = '';
@@ -817,6 +953,30 @@ async function updateSheet(name, status) {
           fullName = name;
         }
         
+        // Map AI status to configured dropdown value
+        let rsvpValue = '';
+        if (status === 'YES' && config.rsvpMapping && config.rsvpMapping.yes) {
+          rsvpValue = config.rsvpMapping.yes;
+        } else if (status === 'NO' && config.rsvpMapping && config.rsvpMapping.no) {
+          rsvpValue = config.rsvpMapping.no;
+        } else if (status === 'UNSURE' && config.rsvpMapping && config.rsvpMapping.unsure) {
+          rsvpValue = config.rsvpMapping.unsure;
+        } else {
+          // Fallback to original status if no mapping configured
+          rsvpValue = status;
+        }
+        
+        // Find the next empty row (ensure it's after headers)
+        const headerRowIndex = config.headerRowIndex || 0;
+        const nextEmptyRow = await window.findNextEmptyRow(token, result.spreadsheetId, sheetName, headerRowIndex + 1);
+        
+        // Verify the row is after headers and not the header row itself
+        if (nextEmptyRow <= headerRowIndex) {
+          throw new Error(`Invalid row calculation: next empty row (${nextEmptyRow}) must be after header row (${headerRowIndex + 1})`);
+        }
+        
+        console.log(`Header row: ${headerRowIndex + 1}, Next empty row: ${nextEmptyRow}`);
+        
         // Build the data array based on configured columns
         const rowData = [];
         const columns = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J']; // Support up to 10 columns
@@ -830,14 +990,34 @@ async function updateSheet(name, status) {
           columnIndices.push(columns.indexOf(config.fullNameColumn));
         }
         columnIndices.push(columns.indexOf(config.rsvpResponseColumn));
-        columnIndices.push(columns.indexOf(config.dateColumn));
+        
+        console.log('Column configuration:', {
+          nameFormat: config.nameFormat,
+          firstNameColumn: config.firstNameColumn,
+          lastNameColumn: config.lastNameColumn,
+          fullNameColumn: config.fullNameColumn,
+          rsvpResponseColumn: config.rsvpResponseColumn,
+          columnIndices: columnIndices
+        });
         
         const filteredIndices = columnIndices.filter(i => i >= 0);
         const maxColumnIndex = Math.max(...filteredIndices);
         
-        // Use the configured header row + 1 for data insertion (next row after headers)
-        const dataRowIndex = (config.headerRowIndex || 0) + 1;
-        const range = `${sheetName}!A${dataRowIndex}:${columns[maxColumnIndex]}${dataRowIndex}`;
+        console.log('Column calculation:', {
+          columnIndices: columnIndices,
+          filteredIndices: filteredIndices,
+          maxColumnIndex: maxColumnIndex
+        });
+        
+        // Ensure we have valid column indices
+        if (filteredIndices.length === 0 || maxColumnIndex < 0) {
+          throw new Error('No valid column indices found. Please check your column configuration.');
+        }
+        
+        // Use the next empty row for data insertion
+        const range = `${sheetName}!A${nextEmptyRow}:${columns[maxColumnIndex]}${nextEmptyRow}`;
+        
+        console.log(`Inserting data at range: ${range}`);
         
         // Build data row with proper column mapping
         for (let i = 0; i <= maxColumnIndex; i++) {
@@ -857,18 +1037,20 @@ async function updateSheet(name, status) {
           }
           
           if (columnLetter === config.rsvpResponseColumn) {
-            value = status;
-          } else if (columnLetter === config.dateColumn) {
-            value = new Date().toISOString();
+            value = rsvpValue;
           }
           
           rowData.push(value);
         }
         
+        console.log(`Data to insert:`, rowData);
+        
         try {
-          await window.updateSheetData(token, result.spreadsheetId, range, [rowData]);
-          alert(`Added ${name} as ${status === 'YES' ? 'attending' : 'not attending'}`);
+          const updateResult = await window.updateSheetData(token, result.spreadsheetId, range, [rowData]);
+          console.log(`Update result:`, updateResult);
+          alert(`Added ${name} with RSVP status: ${rsvpValue} to row ${nextEmptyRow}`);
         } catch (error) {
+          console.error('Update failed:', error);
           alert('Error updating sheet: ' + error.message);
         }
       });
@@ -878,11 +1060,437 @@ async function updateSheet(name, status) {
   }
 }
 
-// Flag message for manual review
-function flagForReview(name, response) {
-  alert(`Flagged for review:\nName: ${name}\nResponse: ${response}\n\nPlease check this manually.`);
+// Add event listener for RSVP response column selection
+document.addEventListener('DOMContentLoaded', function() {
+  const rsvpResponseSelect = document.getElementById('rsvp-response-column');
+  if (rsvpResponseSelect) {
+    rsvpResponseSelect.addEventListener('change', function() {
+      if (this.value) {
+        detectDropdownOptions(this.value);
+      }
+    });
+  }
+  
+  // Add event listener for manual detect dropdowns button
+  const detectDropdownsBtn = document.getElementById('detect-dropdowns');
+  if (detectDropdownsBtn) {
+    detectDropdownsBtn.addEventListener('click', function() {
+      const rsvpColumn = document.getElementById('rsvp-response-column').value;
+      if (rsvpColumn) {
+        detectDropdownOptions(rsvpColumn);
+      } else {
+        alert('Please select an RSVP Response column first.');
+      }
+    });
+  }
+});
+
+// Detect dropdown options from the selected RSVP response column
+async function detectDropdownOptions(columnLetter) {
+  try {
+    chrome.storage.sync.get(['spreadsheetId', 'rsvpConfig'], async function(result) {
+      if (!result.spreadsheetId) {
+        console.error('No spreadsheet ID found');
+        alert('Please save a Spreadsheet ID first.');
+        return;
+      }
+      
+      if (!result.rsvpConfig) {
+        console.error('No RSVP config found');
+        alert('Please complete the RSVP setup first.');
+        return;
+      }
+      
+      window.authenticateWithGoogle(async function(token) {
+        try {
+          // Use the configured sheet name
+          const sheetName = result.rsvpConfig.sheetName || 'Sheet1';
+          console.log(`Detecting dropdown options in sheet: "${sheetName}" column: ${columnLetter}`);
+          
+          const dropdownOptions = await window.getColumnDropdownOptions(token, result.spreadsheetId, sheetName, columnLetter);
+          
+          if (dropdownOptions.length > 0) {
+            populateDropdownMapping(dropdownOptions);
+            document.getElementById('rsvp-mapping-config').style.display = 'block';
+          } else {
+            // Show message when no options found
+            const dropdownOptionsDiv = document.getElementById('dropdown-options');
+            dropdownOptionsDiv.innerHTML = `
+              <div class="setup-status warning">
+                <strong>No dropdown options detected:</strong><br>
+                No existing values found in column ${columnLetter} of sheet "${sheetName}".<br>
+                You can manually configure the mapping below.
+              </div>
+            `;
+            
+            // Still show the mapping section with empty options
+            populateDropdownMapping([]);
+            document.getElementById('rsvp-mapping-config').style.display = 'block';
+          }
+        } catch (error) {
+          console.error('Error detecting dropdown options:', error);
+          alert('Error detecting dropdown options: ' + error.message);
+        }
+      });
+    });
+  } catch (error) {
+    console.error('Error in detectDropdownOptions:', error);
+    alert('Error: ' + error.message);
+  }
 }
 
-// Make functions available globally for onclick handlers
-window.updateSheet = updateSheet;
-window.flagForReview = flagForReview; 
+// Populate the dropdown mapping interface
+function populateDropdownMapping(options) {
+  // Display detected options
+  const dropdownOptionsDiv = document.getElementById('dropdown-options');
+  if (options.length > 0) {
+    dropdownOptionsDiv.innerHTML = `
+      <div class="setup-status success">
+        <strong>Detected Dropdown Options:</strong><br>
+        ${options.map(option => `• ${option}`).join('<br>')}
+      </div>
+    `;
+  }
+  
+  // Populate mapping selectors
+  const mappingSelectors = ['yes-mapping', 'no-mapping', 'unsure-mapping'];
+  
+  mappingSelectors.forEach(selectorId => {
+    const select = document.getElementById(selectorId);
+    select.innerHTML = '<option value="">Select option...</option>';
+    
+    if (options.length > 0) {
+      options.forEach(option => {
+        const optionElement = document.createElement('option');
+        optionElement.value = option;
+        optionElement.textContent = option;
+        select.appendChild(optionElement);
+      });
+      
+      // Auto-suggest mappings based on option names
+      if (selectorId === 'yes-mapping') {
+        const yesOption = options.find(opt => opt.toLowerCase().includes('yes') || opt.toLowerCase().includes('rsvp yes'));
+        if (yesOption) select.value = yesOption;
+      } else if (selectorId === 'no-mapping') {
+        const noOption = options.find(opt => opt.toLowerCase().includes('no') || opt.toLowerCase().includes('rsvp no'));
+        if (noOption) select.value = noOption;
+      } else if (selectorId === 'unsure-mapping') {
+        const unsureOption = options.find(opt => opt.toLowerCase().includes('needs') || opt.toLowerCase().includes('follow') || opt.toLowerCase().includes('fu'));
+        if (unsureOption) select.value = unsureOption;
+      }
+    } else {
+      // Add default options when no dropdown options are detected
+      const defaultOptions = ['RSVP YES', 'RSVP NO', 'Needs FU', 'Invite Sent (WA)', 'Invite Sent (Text)', 'Invite Sent (Physical)'];
+      defaultOptions.forEach(option => {
+        const optionElement = document.createElement('option');
+        optionElement.value = option;
+        optionElement.textContent = option;
+        select.appendChild(optionElement);
+      });
+    }
+  });
+} 
+
+// Check Google account permissions
+async function checkGooglePermissions() {
+  try {
+    // Try to get a fresh token
+    return new Promise((resolve) => {
+      chrome.identity.getAuthToken({ interactive: true }, function(token) {
+        if (chrome.runtime.lastError) {
+          console.error('Google sign-in failed:', chrome.runtime.lastError);
+          alert('Google sign-in failed: ' + chrome.runtime.lastError.message + '\n\nPlease try signing in again.');
+          resolve(false);
+          return;
+        }
+        
+        if (!token) {
+          alert('No Google token received. Please check your Google account permissions.');
+          resolve(false);
+          return;
+        }
+        
+        console.log('Google token received successfully');
+        resolve(true);
+      });
+    });
+  } catch (error) {
+    console.error('Error checking Google permissions:', error);
+    return false;
+  }
+}
+
+// Add event listener for reset setup button
+document.addEventListener('DOMContentLoaded', function() {
+  const resetSetupBtn = document.getElementById('reset-setup');
+  if (resetSetupBtn) {
+    resetSetupBtn.addEventListener('click', function() {
+      resetSetup();
+    });
+  }
+});
+
+// Reset setup and return to onboarding
+function resetSetup() {
+  if (confirm('Are you sure you want to reset the setup? This will clear all your configuration and return you to the onboarding process.')) {
+    // Clear stored configuration
+    chrome.storage.sync.remove(['rsvpConfig', 'spreadsheetId'], function() {
+      // Show onboarding again
+      document.getElementById('onboarding-steps').style.display = 'block';
+      showStep(1);
+      updateSetupStatus('warning', 'Setup Required: Please configure your RSVP tracking system.');
+      
+      // Hide reset button
+      const resetBtn = document.getElementById('reset-setup');
+      if (resetBtn) {
+        resetBtn.style.display = 'none';
+      }
+      
+      // Clear any existing form data
+      document.getElementById('setup-spreadsheet-id').value = '';
+      document.getElementById('header-row-selector').innerHTML = '<option value="">Select header row...</option>';
+      document.getElementById('rsvp-mapping-config').style.display = 'none';
+      
+      console.log('Setup reset successfully');
+    });
+  }
+} 
+
+// Add event listeners for Calendar and Docs functionality
+document.addEventListener('DOMContentLoaded', function() {
+  const testCalendarBtn = document.getElementById('test-calendar');
+  const testDocsBtn = document.getElementById('test-docs');
+  const createWeddingEventBtn = document.getElementById('create-wedding-event');
+  const createPlanningDocBtn = document.getElementById('create-planning-doc');
+  
+  if (testCalendarBtn) {
+    testCalendarBtn.addEventListener('click', testCalendarAccess);
+  }
+  
+  if (testDocsBtn) {
+    testDocsBtn.addEventListener('click', testDocsAccess);
+  }
+  
+  if (createWeddingEventBtn) {
+    createWeddingEventBtn.addEventListener('click', createWeddingEvent);
+  }
+  
+  if (createPlanningDocBtn) {
+    createPlanningDocBtn.addEventListener('click', createPlanningDocument);
+  }
+});
+
+// Test Calendar access
+async function testCalendarAccess() {
+  try {
+    window.authenticateWithGoogle(async function(token) {
+      try {
+        const calendars = await window.listCalendars(token);
+        const primaryCalendar = await window.getPrimaryCalendar(token);
+        
+        document.getElementById('calendar-docs-results').innerHTML = `
+          <div class="setup-status success">
+            ✅ Calendar access confirmed!
+            <br><strong>Primary Calendar:</strong> ${primaryCalendar.summary}
+            <br><strong>Available Calendars:</strong> ${calendars.items.length}
+            <br><small>You can now create calendar events.</small>
+          </div>
+        `;
+      } catch (error) {
+        document.getElementById('calendar-docs-results').innerHTML = `
+          <div class="setup-status error">
+            ❌ Calendar access failed: ${error.message}
+          </div>
+        `;
+      }
+    });
+  } catch (error) {
+    alert('Error testing calendar access: ' + error.message);
+  }
+}
+
+// Test Docs access
+async function testDocsAccess() {
+  try {
+    window.authenticateWithGoogle(async function(token) {
+      try {
+        const doc = await window.createDocument(token, 'Test Document');
+        
+        document.getElementById('calendar-docs-results').innerHTML = `
+          <div class="setup-status success">
+            ✅ Docs access confirmed!
+            <br><strong>Test Document Created:</strong> ${doc.title}
+            <br><strong>Document ID:</strong> ${doc.documentId}
+            <br><small>You can now create and edit documents.</small>
+          </div>
+        `;
+      } catch (error) {
+        document.getElementById('calendar-docs-results').innerHTML = `
+          <div class="setup-status error">
+            ❌ Docs access failed: ${error.message}
+          </div>
+        `;
+      }
+    });
+  } catch (error) {
+    alert('Error testing docs access: ' + error.message);
+  }
+}
+
+// Create a wedding event
+async function createWeddingEvent() {
+  try {
+    window.authenticateWithGoogle(async function(token) {
+      try {
+        const eventDetails = {
+          title: 'Wedding Ceremony',
+          description: 'Our special day!',
+          startTime: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(), // 1 week from now
+          endTime: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000 + 2 * 60 * 60 * 1000).toISOString(), // 2 hours later
+          timeZone: 'UTC'
+        };
+        
+        const event = await window.createWeddingEvent(token, 'primary', eventDetails);
+        
+        document.getElementById('calendar-docs-results').innerHTML = `
+          <div class="setup-status success">
+            ✅ Wedding event created!
+            <br><strong>Event:</strong> ${event.summary}
+            <br><strong>Start:</strong> ${event.start.dateTime}
+            <br><strong>Event ID:</strong> ${event.id}
+            <br><small>Check your Google Calendar to see the event.</small>
+          </div>
+        `;
+      } catch (error) {
+        document.getElementById('calendar-docs-results').innerHTML = `
+          <div class="setup-status error">
+            ❌ Failed to create wedding event: ${error.message}
+          </div>
+        `;
+      }
+    });
+  } catch (error) {
+    alert('Error creating wedding event: ' + error.message);
+  }
+}
+
+// Create a planning document
+async function createPlanningDocument() {
+  try {
+    window.authenticateWithGoogle(async function(token) {
+      try {
+        const doc = await window.createWeddingPlanningDoc(token, 'Wedding Planning Document');
+        
+        document.getElementById('calendar-docs-results').innerHTML = `
+          <div class="setup-status success">
+            ✅ Planning document created!
+            <br><strong>Document:</strong> ${doc.title}
+            <br><strong>Document ID:</strong> ${doc.documentId}
+            <br><strong>URL:</strong> <a href="https://docs.google.com/document/d/${doc.documentId}" target="_blank">Open Document</a>
+            <br><small>Check your Google Docs to see the document.</small>
+          </div>
+        `;
+      } catch (error) {
+        document.getElementById('calendar-docs-results').innerHTML = `
+          <div class="setup-status error">
+            ❌ Failed to create planning document: ${error.message}
+          </div>
+        `;
+      }
+    });
+  } catch (error) {
+    alert('Error creating planning document: ' + error.message);
+  }
+} 
+
+// Search for guest names in the sheet and provide autocomplete
+async function searchGuestName(index) {
+  try {
+    chrome.storage.sync.get(['spreadsheetId', 'rsvpConfig'], async function(result) {
+      if (!result.spreadsheetId || !result.rsvpConfig) {
+        alert('Please complete the RSVP setup first.');
+        return;
+      }
+      
+      const inputField = document.getElementById(`guest-name-${index}`);
+      const searchTerm = inputField.value.trim();
+      
+      if (!searchTerm) {
+        alert('Please enter a name to search for.');
+        return;
+      }
+      
+      window.authenticateWithGoogle(async function(token) {
+        try {
+          const config = result.rsvpConfig;
+          const sheetName = config.sheetName || 'Sheet1';
+          
+          // Get all data from the sheet to search for names
+          const response = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${result.spreadsheetId}/values/${encodeURIComponent(sheetName)}!A:Z`, {
+            headers: {
+              'Authorization': `Bearer ${token}`,
+              'Content-Type': 'application/json'
+            }
+          });
+          
+          if (!response.ok) {
+            throw new Error(`Failed to read sheet: ${response.status} ${response.statusText}`);
+          }
+          
+          const data = await response.json();
+          
+          if (!data.values || data.values.length === 0) {
+            alert('No data found in the sheet to search.');
+            return;
+          }
+          
+          // Extract names based on the configured name format
+          const names = [];
+          const headerRowIndex = config.headerRowIndex || 0;
+          
+          for (let i = headerRowIndex + 1; i < data.values.length; i++) {
+            const row = data.values[i];
+            let name = '';
+            
+            if (config.nameFormat === 'separate') {
+              const firstNameCol = config.firstNameColumn ? config.firstNameColumn.charCodeAt(0) - 65 : 0;
+              const lastNameCol = config.lastNameColumn ? config.lastNameColumn.charCodeAt(0) - 65 : 0;
+              
+              const firstName = row[firstNameCol] || '';
+              const lastName = row[lastNameCol] || '';
+              name = `${firstName} ${lastName}`.trim();
+            } else {
+              const fullNameCol = config.fullNameColumn ? config.fullNameColumn.charCodeAt(0) - 65 : 0;
+              name = row[fullNameCol] || '';
+            }
+            
+            if (name && name.toLowerCase().includes(searchTerm.toLowerCase())) {
+              names.push(name);
+            }
+          }
+          
+          if (names.length > 0) {
+            // Show autocomplete suggestions
+            const suggestions = names.slice(0, 5); // Limit to 5 suggestions
+            const suggestionText = suggestions.map(name => `• ${name}`).join('\n');
+            
+            if (confirm(`Found ${names.length} matching names:\n\n${suggestionText}\n\nWould you like to use the first match: "${suggestions[0]}"?`)) {
+              inputField.value = suggestions[0];
+            }
+          } else {
+            alert(`No names found matching "${searchTerm}". You can manually enter the name.`);
+          }
+        } catch (error) {
+          console.error('Error searching for names:', error);
+          alert('Error searching for names: ' + error.message);
+        }
+      });
+    });
+  } catch (error) {
+    console.error('Error in searchGuestName:', error);
+    alert('Error: ' + error.message);
+  }
+}
+
+// Make the search function available globally
+window.searchGuestName = searchGuestName; 
