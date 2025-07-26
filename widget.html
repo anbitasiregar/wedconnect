@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>WedConnect Widget</title>
+  <link rel="stylesheet" href="widget.css">
+</head>
+<body>
+  <div id="wedconnect-widget" class="widget-container">
+    <div class="widget-header">
+      <div class="widget-title">WedConnect</div>
+      <div class="widget-controls">
+        <button id="minimize-btn" class="control-btn">−</button>
+        <button id="close-btn" class="control-btn">×</button>
+      </div>
+    </div>
+    
+    <div class="widget-content">
+      <div class="main-actions">
+        <button id="update-rsvp-btn" class="primary-btn">Update RSVP</button>
+        <button id="settings-btn" class="secondary-btn">⚙️</button>
+      </div>
+      
+      <div id="ai-results" class="results-area"></div>
+      
+      <div id="settings-menu" class="settings-menu hidden">
+        <button id="sign-in-google">Sign in with Google</button>
+        <button id="start-setup">Start RSVP Setup Wizard</button>
+        <button id="run-tests">Run Test Suite</button>
+      </div>
+    </div>
+  </div>
+  
+  <script src="widget.js"></script>
+</body>
+</html> 

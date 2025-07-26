@@ -1,28 +1,18 @@
 {
   "manifest_version": 3,
-  "name": "WedConnect Hello World",
+  "name": "WedConnect",
   "version": "1.0",
-  "description": "A simple hello world Chrome extension for wedding planners.",
-  "action": {
-    "default_popup": "popup.html",
-    "default_icon": {
-      "16": "icon16.png",
-      "48": "icon48.png",
-      "128": "icon128.png"
-    }
-  },
-  "icons": {
-    "16": "icon16.png",
-    "48": "icon48.png",
-    "128": "icon128.png"
-  },
+  "description": "Wedding planner automation tool for WhatsApp, Google Sheets, Calendar, and Docs",
   "permissions": [
     "identity",
     "storage",
-    "tabs"
+    "tabs",
+    "activeTab",
+    "scripting"
   ],
   "host_permissions": [
-    "https://www.googleapis.com/*"
+    "https://www.googleapis.com/*",
+    "https://web.whatsapp.com/*"
   ],
   "oauth2": {
     "client_id": "997774247576-qe7184nr00sefra4m4v8366setqjd2u6.apps.googleusercontent.com",
@@ -33,16 +23,23 @@
       "https://www.googleapis.com/auth/userinfo.email"
     ]
   },
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "WedConnect"
+  },
   "content_scripts": [
     {
-      "matches": [
-        "https://web.whatsapp.com/*",
-        "https://*.whatsapp.com/*"
-      ],
+      "matches": ["https://web.whatsapp.com/*"],
       "js": ["content.js"]
     }
   ],
   "background": {
     "service_worker": "background.js"
-  }
+  },
+  "web_accessible_resources": [
+    {
+      "resources": ["widget.html", "widget.js", "widget.css"],
+      "matches": ["<all_urls>"]
+    }
+  ]
 } 

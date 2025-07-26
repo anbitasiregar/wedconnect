@@ -96,6 +96,21 @@
       background: #45a049;
     }
     
+    .secondary-btn {
+      background: rgba(255, 255, 255, 0.2);
+      color: white;
+      border: none;
+      padding: 8px 12px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 14px;
+      transition: background 0.3s ease;
+    }
+    
+    .secondary-btn:hover {
+      background: rgba(255, 255, 255, 0.3);
+    }
+    
     .ai-results {
       background: white;
       color: #333;
@@ -160,7 +175,12 @@
 
   <div class="main-content">
     <button id="update-rsvp" class="update-rsvp-btn">Update RSVP</button>
-    <div id="ai-results" class="ai-results"></div>
+    <button id="toggle-widget" class="secondary-btn" style="margin-top: 8px;">Toggle Floating Widget</button>
+    <div id="ai-results" class="ai-results">
+      <p style="color: #2196f3; font-size: 12px; margin: 8px 0 0 0;">
+        💡 Tip: The floating widget works best on WhatsApp Web or other regular websites.
+      </p>
+    </div>
   </div>
 
   <!-- Hidden sections for settings functionality -->

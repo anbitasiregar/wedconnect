@@ -222,5 +222,12 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       console.error('Error in content script:', error);
       sendResponse({ invitationMessage: null, extractedNames: [], replies: [], error: error.message });
     }
+  } else if (request.action === 'toggleWidget') {
+    console.log('Content script received toggle widget message');
+    // Forward the message to the widget if it exists
+    if (window.WedConnectWidget && window.WedConnectWidget.instance) {
+      window.WedConnectWidget.instance.toggleVisibility();
+    }
+    sendResponse({success: true});
   }
 }); 

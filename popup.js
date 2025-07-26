@@ -5,6 +5,12 @@ let rsvpConfig = {};
 
 // Check if setup is complete on page load
 document.addEventListener('DOMContentLoaded', function() {
+  console.log('DOM Content Loaded - setting up event listeners');
+  
+  // Debug: Check all buttons
+  console.log('All buttons in DOM:', document.querySelectorAll('button'));
+  console.log('Toggle widget button by ID:', document.getElementById('toggle-widget'));
+  console.log('Toggle widget button by class:', document.querySelector('.secondary-btn'));
   // Settings menu functionality
   const settingsBtn = document.getElementById('settings-btn');
   const settingsMenu = document.getElementById('settings-menu');
@@ -63,6 +69,134 @@ document.addEventListener('DOMContentLoaded', function() {
   const updateRsvpBtn = document.getElementById('update-rsvp');
   if (updateRsvpBtn) {
     updateRsvpBtn.addEventListener('click', analyzeWhatsAppMessages);
+  }
+  
+  // Toggle Widget button
+  const toggleWidgetBtn = document.getElementById('toggle-widget');
+  console.log('Toggle widget button found:', toggleWidgetBtn);
+  if (toggleWidgetBtn) {
+    toggleWidgetBtn.addEventListener('click', function() {
+      console.log('Toggle widget button clicked');
+      chrome.tabs.query({active: true, currentWindow: true}, function(tabs) {
+        if (tabs[0]) {
+          console.log('Sending toggle widget message to tab:', tabs[0].id);
+          console.log('Tab URL:', tabs[0].url);
+          
+          // Check if we can inject scripts on this tab
+          if (tabs[0].url.startsWith('chrome://') || tabs[0].url.startsWith('chrome-extension://') || tabs[0].url.startsWith('about:')) {
+            console.log('Cannot inject on Chrome internal page');
+            const aiResultsDiv = document.getElementById('ai-results');
+            if (aiResultsDiv) {
+              aiResultsDiv.innerHTML = '<p style="color: #f44336;">Widget cannot be injected on this page. Please navigate to a regular website (like WhatsApp Web) and try again.</p>';
+            }
+            return;
+          }
+          
+          chrome.tabs.sendMessage(tabs[0].id, {action: "toggleWidget"}, function(response) {
+            if (chrome.runtime.lastError) {
+              console.log('Widget toggle failed:', chrome.runtime.lastError.message);
+              // Try to inject the widget first
+              chrome.scripting.executeScript({
+                target: { tabId: tabs[0].id },
+                files: ['widget.js']
+              }).then(() => {
+                chrome.scripting.insertCSS({
+                  target: { tabId: tabs[0].id },
+                  files: ['widget.css']
+                });
+                chrome.scripting.executeScript({
+                  target: { tabId: tabs[0].id },
+                  function: createWidget
+                }).then(() => {
+                  // Try toggling again after injection
+                  setTimeout(() => {
+                    chrome.tabs.sendMessage(tabs[0].id, {action: "toggleWidget"}, function(response) {
+                      if (chrome.runtime.lastError) {
+                        const aiResultsDiv = document.getElementById('ai-results');
+                        if (aiResultsDiv) {
+                          aiResultsDiv.innerHTML = '<p style="color: #f44336;">Widget injection failed. Please refresh the page and try again.</p>';
+                        }
+                      } else {
+                        const aiResultsDiv = document.getElementById('ai-results');
+                        if (aiResultsDiv) {
+                          aiResultsDiv.innerHTML = '<p style="color: #4caf50;">Widget injected and toggled successfully!</p>';
+                        }
+                      }
+                    });
+                  }, 500);
+                });
+              }).catch(err => {
+                console.log('Widget injection failed:', err);
+                const aiResultsDiv = document.getElementById('ai-results');
+                if (aiResultsDiv) {
+                  let errorMessage = 'Widget injection failed. Please refresh the page and try again.';
+                  if (err.message.includes('chrome://')) {
+                    errorMessage = 'Widget cannot be injected on this page. Please navigate to a regular website (like WhatsApp Web) and try again.';
+                  } else if (err.message.includes('Cannot access')) {
+                    errorMessage = 'Widget cannot be injected on this page. Please navigate to a regular website (like WhatsApp Web) and try again.';
+                  }
+                  aiResultsDiv.innerHTML = `<p style="color: #f44336;">${errorMessage}</p>`;
+                }
+              });
+            } else {
+              console.log('Widget toggle successful');
+              const aiResultsDiv = document.getElementById('ai-results');
+              if (aiResultsDiv) {
+                aiResultsDiv.innerHTML = '<p style="color: #4caf50;">Widget toggled successfully!</p>';
+              }
+            }
+          });
+        } else {
+          console.log('No active tab found');
+        }
+      });
+    });
+  } else {
+    console.error('Toggle widget button not found in DOM');
+  }
+  
+  // Function to create widget element (for injection)
+  function createWidget() {
+    // Check if widget already exists
+    if (document.getElementById('wedconnect-widget')) {
+      return;
+    }
+    
+    // Create widget container
+    const widgetHTML = `
+      <div id="wedconnect-widget" class="widget-container">
+        <div class="widget-header">
+          <div class="widget-title">WedConnect</div>
+          <div class="widget-controls">
+            <button id="minimize-btn" class="control-btn">−</button>
+            <button id="close-btn" class="control-btn">×</button>
+          </div>
+        </div>
+        
+        <div class="widget-content">
+          <div class="main-actions">
+            <button id="update-rsvp-btn" class="primary-btn">Update RSVP</button>
+            <button id="settings-btn" class="secondary-btn">⚙️</button>
+          </div>
+          
+          <div id="ai-results" class="results-area"></div>
+          
+          <div id="settings-menu" class="settings-menu hidden">
+            <button id="sign-in-google">Sign in with Google</button>
+            <button id="start-setup">Start RSVP Setup Wizard</button>
+            <button id="run-tests">Run Test Suite</button>
+          </div>
+        </div>
+      </div>
+    `;
+    
+    // Insert widget into page
+    document.body.insertAdjacentHTML('beforeend', widgetHTML);
+    
+    // Initialize widget
+    if (window.WedConnectWidget) {
+      new window.WedConnectWidget();
+    }
   }
   
   // Helper function to extract spreadsheet ID from URL
