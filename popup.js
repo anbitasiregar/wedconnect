@@ -1139,16 +1139,22 @@ function fetchMessages() {
   });
 }
 
-document.getElementById('fetch-messages').addEventListener('click', fetchMessages);
+const fetchMessagesBtn = document.getElementById('fetch-messages');
+if (fetchMessagesBtn) {
+  fetchMessagesBtn.addEventListener('click', fetchMessages);
+}
 
 // Google Sign-In button handler
 import('./sheets.js');
-document.getElementById('google-signin').addEventListener('click', function() {
-  window.authenticateWithGoogle(function(token) {
-    console.log('Google OAuth token:', token);
-    // You can now use this token to call Google Sheets API
+const googleSigninBtn = document.getElementById('google-signin');
+if (googleSigninBtn) {
+  googleSigninBtn.addEventListener('click', function() {
+    window.authenticateWithGoogle(function(token) {
+      console.log('Google OAuth token:', token);
+      // You can now use this token to call Google Sheets API
+    });
   });
-});
+}
 
 // Load and save Google Sheets settings
 document.addEventListener('DOMContentLoaded', function() {
@@ -1162,7 +1168,9 @@ document.addEventListener('DOMContentLoaded', function() {
   });
 });
 
-document.getElementById('save-settings').addEventListener('click', function() {
+const saveSettingsBtn = document.getElementById('save-settings');
+if (saveSettingsBtn) {
+  saveSettingsBtn.addEventListener('click', function() {
   let spreadsheetInput = document.getElementById('spreadsheet-id').value.trim();
   const sheetName = document.getElementById('sheet-name').value;
 
@@ -1175,10 +1183,13 @@ document.getElementById('save-settings').addEventListener('click', function() {
   chrome.storage.sync.set({ spreadsheetId: spreadsheetInput, sheetName }, function() {
     alert('Settings saved!');
   });
-});
+  });
+}
 
 // Read sheet data button handler
-document.getElementById('read-sheet').addEventListener('click', function() {
+const readSheetBtn = document.getElementById('read-sheet');
+if (readSheetBtn) {
+  readSheetBtn.addEventListener('click', function() {
   window.authenticateWithGoogle(async function(token) {
     chrome.storage.sync.get(['spreadsheetId', 'sheetName'], async function(result) {
       if (!result.spreadsheetId) {
@@ -1201,7 +1212,8 @@ document.getElementById('read-sheet').addEventListener('click', function() {
       }
     });
   });
-});
+  });
+}
 
 // AI API key save/load
 document.addEventListener('DOMContentLoaded', function() {
@@ -1212,16 +1224,18 @@ document.addEventListener('DOMContentLoaded', function() {
   });
 });
 
-document.getElementById('save-ai-key').addEventListener('click', function() {
+const saveAiKeyBtn = document.getElementById('save-ai-key');
+if (saveAiKeyBtn) {
+  saveAiKeyBtn.addEventListener('click', function() {
   const aiApiKey = document.getElementById('ai-api-key').value;
   chrome.storage.sync.set({ aiApiKey }, function() {
     alert('AI API Key saved!');
   });
-});
+  });
+}
 
 // Analyze WhatsApp messages with AI
 import('./aiProvider.js');
-document.getElementById('analyze-messages').addEventListener('click', function() {
   // Use the same message fetching logic as fetchMessages
   chrome.tabs.query({ active: true, currentWindow: true }, function (tabs) {
     console.log('Analyze - Current tab:', tabs[0]);
@@ -1410,6 +1424,19 @@ Focus on:
             
             // Step 3: Show results for user confirmation
             showRSVPConfirmation(extractedNames, rsvpAnalysis, response.replies);
+          });
+        } catch (error) {
+          console.error('Analysis error:', error);
+          const aiResultsDiv = document.getElementById('ai-results');
+          if (aiResultsDiv) {
+            aiResultsDiv.innerHTML = `<p style="color: red;">Error analyzing messages: ${error.message}</p>`;
+          }
+        }
+      });
+    });
+  });
+  });
+}
             
           });
         } catch (error) {

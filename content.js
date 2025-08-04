@@ -240,7 +240,7 @@ function createWidget() {
       <div class="widget-content">
         <div class="main-actions">
           <button id="update-rsvp-btn" class="primary-btn">Update RSVP</button>
-          <button id="settings-btn" class="secondary-btn">⚙️</button>
+          <button id="settings-btn" class="secondary-btn">Settings</button>
         </div>
         
         <div id="ai-results" class="results-area"></div>
@@ -248,8 +248,8 @@ function createWidget() {
         <!-- Chatbot Interface -->
         <div id="chatbot-section" class="chatbot-section">
           <div class="chat-header">
-            <span class="chat-title">🤖 AI Assistant</span>
-            <button id="toggle-chat" class="chat-toggle-btn">💬</button>
+            <span class="chat-title">AI Assistant</span>
+            <button id="toggle-chat" class="chat-toggle-btn">Chat</button>
           </div>
           
           <div id="chat-container" class="chat-container hidden">
@@ -258,11 +258,11 @@ function createWidget() {
                 <div class="message-content">
                   Hi! I'm your wedding planning assistant. I can help you with:
                   <ul>
-                    <li>📋 Upload WhatsApp attachments to Google Drive</li>
-                    <li>📅 Create calendar events</li>
-                    <li>📊 Update RSVP responses</li>
-                    <li>📝 Create planning documents</li>
-                    <li>🔍 Search and organize files</li>
+                    <li>Upload WhatsApp attachments to Google Drive</li>
+                    <li>Create calendar events</li>
+                    <li>Update RSVP responses</li>
+                    <li>Create planning documents</li>
+                    <li>Search and organize files</li>
                   </ul>
                   What would you like me to help you with?
                 </div>

@@ -469,6 +469,14 @@ Would you like me to proceed with uploading these attachments?`;
   hide() {
     this.widget.style.display = 'none';
     this.saveVisibility(false);
+    
+    // Send state update to background script
+    if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.sendMessage) {
+      chrome.runtime.sendMessage({
+        action: 'updateWidgetState',
+        state: { isVisible: false }
+      });
+    }
   }
   
   show() {
@@ -485,6 +493,15 @@ Would you like me to proceed with uploading these attachments?`;
     this.widget.style.zIndex = '10000';
     
     this.saveVisibility(true);
+    
+    // Send state update to background script
+    if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.sendMessage) {
+      chrome.runtime.sendMessage({
+        action: 'updateWidgetState',
+        state: { isVisible: true }
+      });
+    }
+    
     console.log('Widget should now be visible');
   }
   
@@ -510,6 +527,17 @@ Would you like me to proceed with uploading these attachments?`;
     };
     
     chrome.storage.sync.set({ widgetPosition: position });
+    
+    // Also send to background script for cross-tab persistence
+    if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.sendMessage) {
+      chrome.runtime.sendMessage({
+        action: 'updateWidgetState',
+        state: { 
+          position: { x: position.x, y: position.y },
+          isVisible: position.visible
+        }
+      });
+    }
   }
   
   loadPosition() {

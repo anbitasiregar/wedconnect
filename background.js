@@ -7,11 +7,17 @@ chrome.action.onClicked.addListener((tab) => {
   chrome.tabs.sendMessage(tab.id, { action: "toggleWidget" });
 });
 
+// Store widget state across tabs
+let widgetState = {
+  isVisible: true,
+  position: { x: 20, y: 20 }
+};
+
 // Listen for tab updates to inject widget
 chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
   if (changeInfo.status === 'complete' && tab.url) {
-    // Auto-inject widget on WhatsApp Web and other suitable sites
-    if (tab.url.includes('web.whatsapp.com') || tab.url.includes('google.com') || tab.url.includes('docs.google.com')) {
+    // Auto-inject widget on all sites (except chrome:// and chrome-extension://)
+    if (!tab.url.startsWith('chrome://') && !tab.url.startsWith('chrome-extension://') && !tab.url.startsWith('about:')) {
       console.log('Auto-injecting widget on:', tab.url);
       
       // Inject widget into the page
@@ -30,17 +36,29 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
           target: { tabId: tabId },
           function: createWidget
         }).then(() => {
-          // Ensure widget is visible by default
+          // Restore widget state and ensure it's visible
           chrome.scripting.executeScript({
             target: { tabId: tabId },
-            function: () => {
+            function: (state) => {
               const widget = document.getElementById('wedconnect-widget');
               if (widget) {
                 widget.classList.remove('minimized');
                 widget.style.display = 'block';
                 widget.style.visibility = 'visible';
+                
+                // Restore position if available
+                if (state.position) {
+                  widget.style.left = state.position.x + 'px';
+                  widget.style.top = state.position.y + 'px';
+                }
+                
+                // Restore visibility state
+                if (!state.isVisible) {
+                  widget.style.display = 'none';
+                }
               }
-            }
+            },
+            args: [widgetState]
           });
         });
       }).catch(err => {
@@ -48,6 +66,30 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
       });
     }
   }
+});
+
+// Listen for tab activation to ensure widget is visible
+chrome.tabs.onActivated.addListener((activeInfo) => {
+  console.log('Tab activated:', activeInfo.tabId);
+  
+  // Check if widget exists on the activated tab
+  chrome.scripting.executeScript({
+    target: { tabId: activeInfo.tabId },
+    function: () => {
+      const widget = document.getElementById('wedconnect-widget');
+      if (widget) {
+        console.log('Widget found on activated tab, ensuring visibility');
+        // Ensure widget is visible and positioned correctly
+        widget.style.display = 'block';
+        widget.style.visibility = 'visible';
+        widget.style.zIndex = '10000';
+      } else {
+        console.log('No widget found on activated tab');
+      }
+    }
+  }).catch(err => {
+    console.log('Could not check widget on activated tab:', err);
+  });
 });
 
 // Function to create widget element
@@ -71,7 +113,7 @@ function createWidget() {
       <div class="widget-content">
         <div class="main-actions">
           <button id="update-rsvp-btn" class="primary-btn">Update RSVP</button>
-          <button id="settings-btn" class="secondary-btn">⚙️</button>
+          <button id="settings-btn" class="secondary-btn">Settings</button>
         </div>
         
         <div id="ai-results" class="results-area"></div>
@@ -79,8 +121,8 @@ function createWidget() {
         <!-- Chatbot Interface -->
         <div id="chatbot-section" class="chatbot-section">
           <div class="chat-header">
-            <span class="chat-title">🤖 AI Assistant</span>
-            <button id="toggle-chat" class="chat-toggle-btn">💬</button>
+            <span class="chat-title">AI Assistant</span>
+            <button id="toggle-chat" class="chat-toggle-btn">Chat</button>
           </div>
           
           <div id="chat-container" class="chat-container hidden">
@@ -89,11 +131,11 @@ function createWidget() {
                 <div class="message-content">
                   Hi! I'm your wedding planning assistant. I can help you with:
                   <ul>
-                    <li>📋 Upload WhatsApp attachments to Google Drive</li>
-                    <li>📅 Create calendar events</li>
-                    <li>📊 Update RSVP responses</li>
-                    <li>📝 Create planning documents</li>
-                    <li>🔍 Search and organize files</li>
+                    <li>Upload WhatsApp attachments to Google Drive</li>
+                    <li>Create calendar events</li>
+                    <li>Update RSVP responses</li>
+                    <li>Create planning documents</li>
+                    <li>Search and organize files</li>
                   </ul>
                   What would you like me to help you with?
                 </div>
@@ -127,7 +169,14 @@ function createWidget() {
 
 // Listen for messages from content scripts
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-  if (request.action === "toggleWidget") {
+  if (request.action === "updateWidgetState") {
+    // Update stored widget state
+    if (request.state) {
+      widgetState = { ...widgetState, ...request.state };
+      console.log('Updated widget state:', widgetState);
+    }
+    sendResponse({ success: true });
+  } else if (request.action === "toggleWidget") {
     chrome.tabs.sendMessage(sender.tab.id, { action: "toggleWidget" }, (response) => {
       if (chrome.runtime.lastError) {
         console.log('Widget toggle failed:', chrome.runtime.lastError.message);
