@@ -211,6 +211,102 @@ With great pleasure, we cordially invite you to our wedding reception (syukuran)
 // Run test when content script loads
 testNameExtraction();
 
+// Function to create widget element (for content script)
+function createWidget() {
+  console.log('Creating widget from content script');
+  // Check if widget already exists
+  if (document.getElementById('wedconnect-widget')) {
+    console.log('Widget already exists');
+    return;
+  }
+  
+  // Check if WedConnectWidget class is already defined
+  if (window.WedConnectWidget && window.WedConnectWidget.instance) {
+    console.log('Widget instance already exists');
+    return;
+  }
+  
+  // Create widget container
+  const widgetHTML = `
+    <div id="wedconnect-widget" class="widget-container">
+      <div class="widget-header">
+        <div class="widget-title">WedConnect</div>
+        <div class="widget-controls">
+          <button id="minimize-btn" class="control-btn">−</button>
+          <button id="close-btn" class="control-btn">×</button>
+        </div>
+      </div>
+      
+      <div class="widget-content">
+        <div class="main-actions">
+          <button id="update-rsvp-btn" class="primary-btn">Update RSVP</button>
+          <button id="settings-btn" class="secondary-btn">⚙️</button>
+        </div>
+        
+        <div id="ai-results" class="results-area"></div>
+        
+        <!-- Chatbot Interface -->
+        <div id="chatbot-section" class="chatbot-section">
+          <div class="chat-header">
+            <span class="chat-title">🤖 AI Assistant</span>
+            <button id="toggle-chat" class="chat-toggle-btn">💬</button>
+          </div>
+          
+          <div id="chat-container" class="chat-container hidden">
+            <div id="chat-messages" class="chat-messages">
+              <div class="message bot-message">
+                <div class="message-content">
+                  Hi! I'm your wedding planning assistant. I can help you with:
+                  <ul>
+                    <li>📋 Upload WhatsApp attachments to Google Drive</li>
+                    <li>📅 Create calendar events</li>
+                    <li>📊 Update RSVP responses</li>
+                    <li>📝 Create planning documents</li>
+                    <li>🔍 Search and organize files</li>
+                  </ul>
+                  What would you like me to help you with?
+                </div>
+              </div>
+            </div>
+            
+            <div class="chat-input-container">
+              <input type="text" id="chat-input" class="chat-input" placeholder="Ask me anything...">
+              <button id="send-message" class="send-btn">Send</button>
+            </div>
+          </div>
+        </div>
+        
+        <div id="settings-menu" class="settings-menu hidden">
+          <button id="sign-in-google">Sign in with Google</button>
+          <button id="start-setup">Start RSVP Setup Wizard</button>
+          <button id="run-tests">Run Test Suite</button>
+        </div>
+      </div>
+    </div>
+  `;
+  
+  // Insert widget into page
+  document.body.insertAdjacentHTML('beforeend', widgetHTML);
+  console.log('Widget HTML inserted');
+  
+  // Ensure widget is visible by default
+  const widget = document.getElementById('wedconnect-widget');
+  if (widget) {
+    widget.style.display = 'block';
+    widget.style.visibility = 'visible';
+    widget.classList.remove('minimized');
+  }
+  
+  // Initialize widget
+  if (window.WedConnectWidget) {
+    window.WedConnectWidget.instance = new window.WedConnectWidget();
+    console.log('Widget instance created');
+  } else {
+    console.log('WedConnectWidget class not available');
+    console.log('Available window properties:', Object.keys(window).filter(key => key.includes('WedConnect')));
+  }
+}
+
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   console.log('Content script received message:', request);
   if (request.action === 'getMessages') {
@@ -226,8 +322,25 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     console.log('Content script received toggle widget message');
     // Forward the message to the widget if it exists
     if (window.WedConnectWidget && window.WedConnectWidget.instance) {
+      console.log('Widget instance found, toggling visibility');
       window.WedConnectWidget.instance.toggleVisibility();
+      sendResponse({success: true, action: 'toggled'});
+    } else {
+      console.log('Widget instance not found, creating new widget');
+      // Try to create widget if it doesn't exist
+      if (typeof createWidget === 'function') {
+        createWidget();
+        setTimeout(() => {
+          if (window.WedConnectWidget && window.WedConnectWidget.instance) {
+            window.WedConnectWidget.instance.show();
+            sendResponse({success: true, action: 'created_and_shown'});
+          } else {
+            sendResponse({success: false, error: 'Failed to create widget'});
+          }
+        }, 500);
+      } else {
+        sendResponse({success: false, error: 'Widget creation function not available'});
+      }
     }
-    sendResponse({success: true});
   }
 }); 

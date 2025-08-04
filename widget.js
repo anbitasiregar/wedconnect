@@ -1,14 +1,29 @@
 // Floating Widget JavaScript
-class WedConnectWidget {
+if (typeof WedConnectWidget === 'undefined') {
+  class WedConnectWidget {
   constructor() {
+    console.log('WedConnectWidget constructor called');
     this.widget = document.getElementById('wedconnect-widget');
     this.header = document.querySelector('.widget-header');
     this.content = document.querySelector('.widget-content');
     this.isDragging = false;
     this.isMinimized = false;
     this.dragOffset = { x: 0, y: 0 };
+    this.chatHistory = [];
+    
+    console.log('Widget elements found:', {
+      widget: !!this.widget,
+      header: !!this.header,
+      content: !!this.content
+    });
     
     this.init();
+    this.loadVisibility();
+    
+    // Ensure widget starts expanded by default
+    if (this.widget) {
+      this.widget.classList.remove('minimized');
+    }
   }
   
   init() {
@@ -16,6 +31,21 @@ class WedConnectWidget {
     this.setupControls();
     this.setupEventListeners();
     this.loadPosition();
+    
+    // Setup chatbot after a short delay to ensure DOM is ready
+    setTimeout(() => {
+      this.setupChatbot();
+      
+      // Ensure chat toggle button is visible and working
+      const toggleChatBtn = document.getElementById('toggle-chat');
+      if (toggleChatBtn) {
+        toggleChatBtn.style.display = 'block';
+        toggleChatBtn.style.visibility = 'visible';
+        console.log('Chat toggle button made visible');
+      } else {
+        console.log('Chat toggle button not found during init');
+      }
+    }, 100);
   }
   
   setupDragging() {
@@ -118,6 +148,314 @@ class WedConnectWidget {
     });
   }
   
+  setupChatbot() {
+    console.log('Setting up chatbot...');
+    
+    // Function to setup chatbot elements
+    const setupChatbotElements = () => {
+      const toggleChatBtn = document.getElementById('toggle-chat');
+      const chatContainer = document.getElementById('chat-container');
+      const chatInput = document.getElementById('chat-input');
+      const sendBtn = document.getElementById('send-message');
+      
+      console.log('Chatbot elements found:', {
+        toggleChatBtn: !!toggleChatBtn,
+        chatContainer: !!chatContainer,
+        chatInput: !!chatInput,
+        sendBtn: !!sendBtn
+      });
+      
+      if (toggleChatBtn && chatContainer) {
+        console.log('Adding click listener to toggle chat button');
+        toggleChatBtn.addEventListener('click', () => {
+          console.log('Toggle chat button clicked');
+          chatContainer.classList.toggle('hidden');
+          if (!chatContainer.classList.contains('hidden')) {
+            if (chatInput) chatInput.focus();
+          }
+        });
+      } else {
+        console.error('Chatbot elements not found:', {
+          toggleChatBtn: toggleChatBtn,
+          chatContainer: chatContainer
+        });
+      }
+      
+      if (sendBtn && chatInput) {
+        console.log('Adding event listeners to chat input and send button');
+        sendBtn.addEventListener('click', () => this.sendMessage());
+        
+        chatInput.addEventListener('keypress', (e) => {
+          if (e.key === 'Enter') {
+            this.sendMessage();
+          }
+        });
+      } else {
+        console.error('Send button or chat input not found');
+      }
+    };
+    
+    // Try immediately
+    setupChatbotElements();
+    
+    // If elements not found, try again after a delay
+    if (!document.getElementById('toggle-chat')) {
+      console.log('Chatbot elements not found immediately, retrying...');
+      setTimeout(setupChatbotElements, 200);
+      
+      // Try again with longer delay
+      setTimeout(setupChatbotElements, 500);
+      
+      // Final attempt
+      setTimeout(setupChatbotElements, 1000);
+    }
+  }
+  
+  async sendMessage() {
+    const chatInput = document.getElementById('chat-input');
+    const message = chatInput.value.trim();
+    
+    if (!message) return;
+    
+    // Add user message to chat
+    this.addMessage(message, 'user');
+    chatInput.value = '';
+    
+    // Show typing indicator
+    this.showTypingIndicator();
+    
+    try {
+      // Process the message with AI
+      const response = await this.processUserMessage(message);
+      this.hideTypingIndicator();
+      this.addMessage(response, 'bot');
+    } catch (error) {
+      this.hideTypingIndicator();
+      this.addMessage('Sorry, I encountered an error. Please try again.', 'bot');
+      console.error('Chatbot error:', error);
+    }
+  }
+  
+  addMessage(content, sender) {
+    const chatMessages = document.getElementById('chat-messages');
+    const messageDiv = document.createElement('div');
+    messageDiv.className = `message ${sender}-message`;
+    
+    const messageContent = document.createElement('div');
+    messageContent.className = 'message-content';
+    messageContent.innerHTML = content;
+    
+    messageDiv.appendChild(messageContent);
+    chatMessages.appendChild(messageDiv);
+    
+    // Scroll to bottom
+    chatMessages.scrollTop = chatMessages.scrollHeight;
+    
+    // Store in history
+    this.chatHistory.push({ content, sender, timestamp: Date.now() });
+  }
+  
+  showTypingIndicator() {
+    const chatMessages = document.getElementById('chat-messages');
+    const typingDiv = document.createElement('div');
+    typingDiv.className = 'message bot-message typing';
+    typingDiv.id = 'typing-indicator';
+    
+    const messageContent = document.createElement('div');
+    messageContent.className = 'message-content';
+    messageContent.textContent = 'Thinking';
+    
+    typingDiv.appendChild(messageContent);
+    chatMessages.appendChild(typingDiv);
+    chatMessages.scrollTop = chatMessages.scrollHeight;
+  }
+  
+  hideTypingIndicator() {
+    const typingIndicator = document.getElementById('typing-indicator');
+    if (typingIndicator) {
+      typingIndicator.remove();
+    }
+  }
+  
+  async processUserMessage(message) {
+    // Get AI API key
+    const result = await chrome.storage.sync.get(['aiApiKey']);
+    const apiKey = result.aiApiKey;
+    
+    if (!apiKey) {
+      return 'Please configure your AI API key in settings to use the chatbot.';
+    }
+    
+    // Build AI prompt for task understanding
+    const aiPrompt = `You are a wedding planning assistant. Analyze the user's request and respond with a JSON object in this exact format:
+
+{
+  "task": "TASK_TYPE",
+  "action": "ACTION_DESCRIPTION",
+  "response": "USER_FRIENDLY_RESPONSE",
+  "requires_whatsapp": true/false,
+  "requires_google": true/false
+}
+
+Available task types:
+- UPLOAD_ATTACHMENT: Upload WhatsApp attachment to Google Drive
+- CREATE_EVENT: Create calendar event
+- UPDATE_RSVP: Update RSVP response
+- CREATE_DOCUMENT: Create planning document
+- SEARCH_FILES: Search and organize files
+- GENERAL_HELP: General assistance
+
+User request: "${message}"
+
+Respond only with the JSON object, no additional text.`;
+
+    try {
+      // Call AI for task analysis
+      const aiResult = await window.callAI(aiPrompt, apiKey);
+      const taskAnalysis = this.parseTaskAnalysis(aiResult);
+      
+      // Execute the task
+      return await this.executeTask(taskAnalysis, message);
+    } catch (error) {
+      console.error('AI processing error:', error);
+      return 'I had trouble understanding your request. Could you please rephrase it?';
+    }
+  }
+  
+  parseTaskAnalysis(aiResult) {
+    try {
+      // Try to extract JSON from AI response
+      const jsonMatch = aiResult.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        return JSON.parse(jsonMatch[0]);
+      }
+      
+      // Fallback parsing
+      const task = aiResult.toLowerCase().includes('upload') ? 'UPLOAD_ATTACHMENT' :
+                   aiResult.toLowerCase().includes('calendar') ? 'CREATE_EVENT' :
+                   aiResult.toLowerCase().includes('rsvp') ? 'UPDATE_RSVP' :
+                   aiResult.toLowerCase().includes('document') ? 'CREATE_DOCUMENT' :
+                   aiResult.toLowerCase().includes('search') ? 'SEARCH_FILES' : 'GENERAL_HELP';
+      
+      return {
+        task: task,
+        action: 'Process user request',
+        response: aiResult,
+        requires_whatsapp: task === 'UPLOAD_ATTACHMENT',
+        requires_google: ['UPLOAD_ATTACHMENT', 'CREATE_EVENT', 'CREATE_DOCUMENT', 'SEARCH_FILES'].includes(task)
+      };
+    } catch (error) {
+      console.error('Task analysis parsing error:', error);
+      return {
+        task: 'GENERAL_HELP',
+        action: 'Process user request',
+        response: aiResult,
+        requires_whatsapp: false,
+        requires_google: false
+      };
+    }
+  }
+  
+  async executeTask(taskAnalysis, originalMessage) {
+    const { task, action, response, requires_whatsapp, requires_google } = taskAnalysis;
+    
+    // Check requirements
+    if (requires_whatsapp && !window.location.href.includes('web.whatsapp.com')) {
+      return 'This task requires WhatsApp Web. Please open WhatsApp Web first.';
+    }
+    
+    if (requires_google) {
+      try {
+        await chrome.identity.getAuthToken({ interactive: false });
+      } catch (error) {
+        return 'This task requires Google access. Please sign in with Google first.';
+      }
+    }
+    
+    // Execute specific tasks
+    switch (task) {
+      case 'UPLOAD_ATTACHMENT':
+        return await this.handleUploadAttachment(originalMessage);
+      
+      case 'CREATE_EVENT':
+        return await this.handleCreateEvent(originalMessage);
+      
+      case 'UPDATE_RSVP':
+        return await this.handleUpdateRSVP(originalMessage);
+      
+      case 'CREATE_DOCUMENT':
+        return await this.handleCreateDocument(originalMessage);
+      
+      case 'SEARCH_FILES':
+        return await this.handleSearchFiles(originalMessage);
+      
+      default:
+        return response || 'I understand your request. How can I help you with that?';
+    }
+  }
+  
+  async handleUploadAttachment(message) {
+    // Check if we're on WhatsApp Web
+    if (!window.location.href.includes('web.whatsapp.com')) {
+      return 'Please open WhatsApp Web to upload attachments.';
+    }
+    
+    // Look for attachments in the current chat
+    const attachments = this.findWhatsAppAttachments();
+    
+    if (attachments.length === 0) {
+      return 'No attachments found in the current chat. Please make sure there are files, images, or documents in the chat.';
+    }
+    
+    // For now, return a helpful message
+    return `I found ${attachments.length} attachment(s) in this chat. To upload them to Google Drive, I'll need to:
+1. Extract the attachment URLs
+2. Download the files
+3. Upload to your specified Google Drive folder
+
+Would you like me to proceed with uploading these attachments?`;
+  }
+  
+  findWhatsAppAttachments() {
+    // Look for common WhatsApp attachment selectors
+    const attachmentSelectors = [
+      '[data-testid="media-canvas"]',
+      '[data-testid="media-document"]',
+      '[data-testid="media-image"]',
+      '.media-container',
+      '.document-container'
+    ];
+    
+    const attachments = [];
+    attachmentSelectors.forEach(selector => {
+      const elements = document.querySelectorAll(selector);
+      elements.forEach(el => {
+        attachments.push({
+          type: selector.includes('image') ? 'image' : 'document',
+          element: el
+        });
+      });
+    });
+    
+    return attachments;
+  }
+  
+  async handleCreateEvent(message) {
+    return 'I can help you create calendar events. Please provide the event details like date, time, and description.';
+  }
+  
+  async handleUpdateRSVP(message) {
+    return 'I can help you update RSVP responses. Let me analyze the current WhatsApp messages for RSVP updates.';
+  }
+  
+  async handleCreateDocument(message) {
+    return 'I can help you create planning documents in Google Docs. What type of document would you like to create?';
+  }
+  
+  async handleSearchFiles(message) {
+    return 'I can help you search and organize files in Google Drive. What are you looking for?';
+  }
+  
   toggleMinimize() {
     this.isMinimized = !this.isMinimized;
     this.widget.classList.toggle('minimized', this.isMinimized);
@@ -134,14 +472,31 @@ class WedConnectWidget {
   }
   
   show() {
+    console.log('Showing widget');
     this.widget.style.display = 'block';
+    
+    // Ensure widget is positioned correctly
+    if (!this.widget.style.left || !this.widget.style.top) {
+      this.widget.style.left = '20px';
+      this.widget.style.top = '20px';
+    }
+    
+    // Ensure widget is on top
+    this.widget.style.zIndex = '10000';
+    
     this.saveVisibility(true);
+    console.log('Widget should now be visible');
   }
   
   toggleVisibility() {
-    if (this.widget.style.display === 'none') {
+    console.log('Toggling widget visibility');
+    console.log('Current display style:', this.widget.style.display);
+    
+    if (this.widget.style.display === 'none' || this.widget.style.display === '') {
+      console.log('Showing widget');
       this.show();
     } else {
+      console.log('Hiding widget');
       this.hide();
     }
   }
@@ -183,6 +538,25 @@ class WedConnectWidget {
     });
   }
   
+  loadVisibility() {
+    if (typeof chrome !== 'undefined' && chrome.storage) {
+      chrome.storage.sync.get(['widgetPosition'], (result) => {
+        const position = result.widgetPosition || {};
+        // Default to visible (true) if no saved state
+        const shouldBeVisible = position.visible !== undefined ? position.visible : true;
+        
+        if (shouldBeVisible) {
+          this.show();
+        } else {
+          this.hide();
+        }
+      });
+    } else {
+      // If Chrome API not available, default to visible
+      this.show();
+    }
+  }
+  
   // Integration with existing functionality
   async analyzeWhatsAppMessages() {
     try {
@@ -193,6 +567,11 @@ class WedConnectWidget {
       }
       
       // Check if we're on WhatsApp Web
+      if (typeof chrome === 'undefined' || !chrome.tabs) {
+        this.showResults('Chrome API not available. Please use this from the extension popup.', 'error');
+        return;
+      }
+      
       const tabs = await chrome.tabs.query({active: true, currentWindow: true});
       const currentTab = tabs[0];
       
@@ -392,4 +771,5 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 // Make functions available globally for external access
-window.WedConnectWidget = WedConnectWidget; 
+window.WedConnectWidget = WedConnectWidget;
+} 

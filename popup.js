@@ -95,36 +95,75 @@ document.addEventListener('DOMContentLoaded', function() {
           chrome.tabs.sendMessage(tabs[0].id, {action: "toggleWidget"}, function(response) {
             if (chrome.runtime.lastError) {
               console.log('Widget toggle failed:', chrome.runtime.lastError.message);
+              console.log('Attempting to inject widget...');
+              
               // Try to inject the widget first
               chrome.scripting.executeScript({
                 target: { tabId: tabs[0].id },
                 files: ['widget.js']
               }).then(() => {
-                chrome.scripting.insertCSS({
+                console.log('Widget JS injected successfully');
+                return chrome.scripting.insertCSS({
                   target: { tabId: tabs[0].id },
                   files: ['widget.css']
                 });
-                chrome.scripting.executeScript({
+              }).then(() => {
+                console.log('Widget CSS injected successfully');
+                return chrome.scripting.executeScript({
                   target: { tabId: tabs[0].id },
                   function: createWidget
-                }).then(() => {
-                  // Try toggling again after injection
-                  setTimeout(() => {
-                    chrome.tabs.sendMessage(tabs[0].id, {action: "toggleWidget"}, function(response) {
-                      if (chrome.runtime.lastError) {
-                        const aiResultsDiv = document.getElementById('ai-results');
-                        if (aiResultsDiv) {
-                          aiResultsDiv.innerHTML = '<p style="color: #f44336;">Widget injection failed. Please refresh the page and try again.</p>';
-                        }
-                      } else {
-                        const aiResultsDiv = document.getElementById('ai-results');
-                        if (aiResultsDiv) {
-                          aiResultsDiv.innerHTML = '<p style="color: #4caf50;">Widget injected and toggled successfully!</p>';
-                        }
-                      }
-                    });
-                  }, 500);
                 });
+              }).then(() => {
+                console.log('Widget creation function executed');
+                // Try toggling again after injection
+                setTimeout(() => {
+                  console.log('Attempting to toggle widget after injection...');
+                  chrome.tabs.sendMessage(tabs[0].id, {action: "toggleWidget"}, function(response) {
+                    if (chrome.runtime.lastError) {
+                      console.log('Second toggle attempt failed:', chrome.runtime.lastError.message);
+                      // Try direct widget creation as fallback
+                      chrome.scripting.executeScript({
+                        target: { tabId: tabs[0].id },
+                        function: () => {
+                          // Direct widget creation without message passing
+                          if (document.getElementById('wedconnect-widget')) {
+                            const widget = document.getElementById('wedconnect-widget');
+                            if (widget.style.display === 'none' || widget.style.display === '') {
+                              widget.style.display = 'block';
+                              if (!widget.style.left || !widget.style.top) {
+                                widget.style.left = '20px';
+                                widget.style.top = '20px';
+                              }
+                              widget.style.zIndex = '10000';
+                              return 'Widget shown directly';
+                            } else {
+                              widget.style.display = 'none';
+                              return 'Widget hidden directly';
+                            }
+                          } else {
+                            return 'Widget not found';
+                          }
+                        }
+                      }).then((results) => {
+                        console.log('Direct widget manipulation result:', results);
+                        const aiResultsDiv = document.getElementById('ai-results');
+                        if (aiResultsDiv) {
+                          if (results[0].result && results[0].result.includes('Widget shown')) {
+                            aiResultsDiv.innerHTML = '<p style="color: #4caf50;">Widget injected and shown successfully!</p>';
+                          } else {
+                            aiResultsDiv.innerHTML = '<p style="color: #f44336;">Widget injection failed. Please refresh the page and try again.</p>';
+                          }
+                        }
+                      });
+                    } else {
+                      console.log('Widget toggle successful after injection');
+                      const aiResultsDiv = document.getElementById('ai-results');
+                      if (aiResultsDiv) {
+                        aiResultsDiv.innerHTML = '<p style="color: #4caf50;">Widget injected and toggled successfully!</p>';
+                      }
+                    }
+                  });
+                }, 1500); // Increased timeout to ensure widget is fully loaded
               }).catch(err => {
                 console.log('Widget injection failed:', err);
                 const aiResultsDiv = document.getElementById('ai-results');
@@ -180,6 +219,37 @@ document.addEventListener('DOMContentLoaded', function() {
           </div>
           
           <div id="ai-results" class="results-area"></div>
+          
+          <!-- Chatbot Interface -->
+          <div id="chatbot-section" class="chatbot-section">
+            <div class="chat-header">
+              <span class="chat-title">🤖 AI Assistant</span>
+              <button id="toggle-chat" class="chat-toggle-btn">💬</button>
+            </div>
+            
+            <div id="chat-container" class="chat-container hidden">
+              <div id="chat-messages" class="chat-messages">
+                <div class="message bot-message">
+                  <div class="message-content">
+                    Hi! I'm your wedding planning assistant. I can help you with:
+                    <ul>
+                      <li>📋 Upload WhatsApp attachments to Google Drive</li>
+                      <li>📅 Create calendar events</li>
+                      <li>📊 Update RSVP responses</li>
+                      <li>📝 Create planning documents</li>
+                      <li>🔍 Search and organize files</li>
+                    </ul>
+                    What would you like me to help you with?
+                  </div>
+                </div>
+              </div>
+              
+              <div class="chat-input-container">
+                <input type="text" id="chat-input" class="chat-input" placeholder="Ask me anything...">
+                <button id="send-message" class="send-btn">Send</button>
+              </div>
+            </div>
+          </div>
           
           <div id="settings-menu" class="settings-menu hidden">
             <button id="sign-in-google">Sign in with Google</button>
