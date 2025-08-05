@@ -279,6 +279,7 @@ function createWidget() {
         <div id="settings-menu" class="settings-menu hidden">
           <button id="sign-in-google">Sign in with Google</button>
           <button id="start-setup">Start RSVP Setup Wizard</button>
+          <button id="reset-chatbot">Reset Chatbot Wizard</button>
           <button id="run-tests">Run Test Suite</button>
         </div>
       </div>
@@ -304,6 +305,13 @@ function createWidget() {
   } else {
     console.log('WedConnectWidget class not available');
     console.log('Available window properties:', Object.keys(window).filter(key => key.includes('WedConnect')));
+  }
+  
+  // Load onboarding script if not already loaded
+  if (!window.ChatbotOnboarding) {
+    const script = document.createElement('script');
+    script.src = chrome.runtime.getURL('chatbotOnboarding.js');
+    document.head.appendChild(script);
   }
 }
 

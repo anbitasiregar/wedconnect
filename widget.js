@@ -117,12 +117,20 @@ if (typeof WedConnectWidget === 'undefined') {
     // Settings menu buttons
     const signInGoogleBtn = document.getElementById('sign-in-google');
     const startSetupBtn = document.getElementById('start-setup');
+    const resetChatbotBtn = document.getElementById('reset-chatbot');
     const runTestsBtn = document.getElementById('run-tests');
     
     if (signInGoogleBtn) {
       signInGoogleBtn.addEventListener('click', () => {
         settingsMenu.classList.add('hidden');
         this.triggerGoogleSignIn();
+      });
+    }
+    
+    if (resetChatbotBtn) {
+      resetChatbotBtn.addEventListener('click', () => {
+        settingsMenu.classList.add('hidden');
+        this.startChatbotOnboarding();
       });
     }
     
@@ -790,6 +798,90 @@ Focus on:
     if (window.runAllTests) {
       window.runAllTests();
     }
+  }
+  
+  // Chatbot onboarding methods
+  async startChatbotOnboarding() {
+    try {
+      // Initialize onboarding if not already done
+      if (!window.chatbotOnboarding) {
+        window.chatbotOnboarding = new ChatbotOnboarding();
+      }
+      
+      // Reset any existing onboarding data
+      await window.chatbotOnboarding.resetWeddingInfo();
+      
+      // Start the onboarding process
+      await window.chatbotOnboarding.startOnboarding();
+      
+      // Show the chat interface
+      const chatContainer = document.getElementById('chat-container');
+      if (chatContainer) {
+        chatContainer.classList.remove('hidden');
+      }
+      
+      this.showResults('Chatbot onboarding started! Please follow the instructions in the chat.', 'info');
+    } catch (error) {
+      this.showResults(`Error starting onboarding: ${error.message}`, 'error');
+    }
+  }
+  
+  // Enhanced message processing for onboarding
+  async processUserMessage(message) {
+    // Check if onboarding is active
+    if (window.chatbotOnboarding && window.chatbotOnboarding.isActive) {
+      await window.chatbotOnboarding.processOnboardingInput(message);
+      return;
+    }
+    
+    // Get AI API key
+    const result = await chrome.storage.sync.get(['aiApiKey']);
+    const apiKey = result.aiApiKey;
+    
+    if (!apiKey) {
+      return 'Please configure your AI API key in settings to use the chatbot.';
+    }
+    
+    // Load wedding information for context
+    let weddingContext = '';
+    try {
+      const weddingInfo = await this.loadWeddingInfo();
+      if (weddingInfo && weddingInfo.mainSheet) {
+        weddingContext = `\n\nWedding Information Context:\n${JSON.stringify(weddingInfo, null, 2)}`;
+      }
+    } catch (error) {
+      console.log('No wedding info loaded:', error.message);
+    }
+    
+    // Build enhanced prompt with wedding context
+    const enhancedPrompt = `You are a wedding planning assistant. You have access to wedding information stored in Google Sheets.
+
+${weddingContext}
+
+User Question: ${message}
+
+Please provide a helpful response based on the wedding information available. If you need more specific information, ask the user to provide it.`;
+    
+    try {
+      const response = await window.callAI(enhancedPrompt, apiKey);
+      return response;
+    } catch (error) {
+      console.error('Chatbot error:', error);
+      return 'Sorry, I encountered an error. Please try again.';
+    }
+  }
+  
+  // Load wedding information
+  async loadWeddingInfo() {
+    return new Promise((resolve, reject) => {
+      chrome.storage.sync.get(['weddingChatbotInfo'], (result) => {
+        if (chrome.runtime.lastError) {
+          reject(new Error(chrome.runtime.lastError.message));
+        } else {
+          resolve(result.weddingChatbotInfo || null);
+        }
+      });
+    });
   }
 }
 

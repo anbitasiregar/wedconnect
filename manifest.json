@@ -40,7 +40,7 @@
   },
   "web_accessible_resources": [
     {
-      "resources": ["widget.html", "widget.js", "widget.css"],
+      "resources": ["widget.html", "widget.js", "widget.css", "chatbotOnboarding.js"],
       "matches": ["<all_urls>"]
     }
   ]

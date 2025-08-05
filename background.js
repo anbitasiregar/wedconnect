@@ -35,31 +35,31 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
         chrome.scripting.executeScript({
           target: { tabId: tabId },
           function: createWidget
-        }).then(() => {
-          // Restore widget state and ensure it's visible
-          chrome.scripting.executeScript({
-            target: { tabId: tabId },
-            function: (state) => {
-              const widget = document.getElementById('wedconnect-widget');
-              if (widget) {
-                widget.classList.remove('minimized');
-                widget.style.display = 'block';
-                widget.style.visibility = 'visible';
-                
-                // Restore position if available
-                if (state.position) {
-                  widget.style.left = state.position.x + 'px';
-                  widget.style.top = state.position.y + 'px';
-                }
-                
-                // Restore visibility state
-                if (!state.isVisible) {
-                  widget.style.display = 'none';
-                }
+        });
+      }).then(() => {
+        // Restore widget state and ensure it's visible
+        chrome.scripting.executeScript({
+          target: { tabId: tabId },
+          function: (state) => {
+            const widget = document.getElementById('wedconnect-widget');
+            if (widget) {
+              widget.classList.remove('minimized');
+              widget.style.display = 'block';
+              widget.style.visibility = 'visible';
+              
+              // Restore position if available
+              if (state.position) {
+                widget.style.left = state.position.x + 'px';
+                widget.style.top = state.position.y + 'px';
               }
-            },
-            args: [widgetState]
-          });
+              
+              // Restore visibility state
+              if (!state.isVisible) {
+                widget.style.display = 'none';
+              }
+            }
+          },
+          args: [widgetState]
         });
       }).catch(err => {
         console.log('Could not inject widget:', err);
@@ -152,6 +152,7 @@ function createWidget() {
         <div id="settings-menu" class="settings-menu hidden">
           <button id="sign-in-google">Sign in with Google</button>
           <button id="start-setup">Start RSVP Setup Wizard</button>
+          <button id="reset-chatbot">Reset Chatbot Wizard</button>
           <button id="run-tests">Run Test Suite</button>
         </div>
       </div>
